@@ -1,0 +1,237 @@
+# Kepler Production Configuration
+# Full-featured configuration for production environments
+# Requires bare-metal nodes with RAPL support for accurate power monitoring
+
+image:
+  repository: quay.io/sustainable_computing_io/kepler
+  pullPolicy: IfNotPresent
+  tag: latest
+
+# Configuration for Kepler
+config:
+  # Logging configuration
+  log:
+    level: warn  # Reduced verbosity for production
+    format: json  # Structured logging for production
+  
+  # Host system paths (mounted from host)
+  host:
+    sysfs: /host/sys
+    procfs: /host/proc
+  
+  # Monitoring intervals (optimized for production)
+  monitor:
+    interval: 3s  # More frequent monitoring
+    staleness: 300ms
+    maxTerminated: 1000
+    minTerminatedEnergyThreshold: 5
+  
+  # RAPL (Running Average Power Limit) configuration
+  # Configure based on your hardware (Intel/AMD processors)
+  rapl:
+    zones:
+      - package-0
+      - core
+      - uncore
+      - dram
+  
+  # Exporter configuration
+  exporter:
+    stdout:
+      enabled: false
+    prometheus:
+      enabled: true
+      debugCollectors:
+        - go
+        - process
+      metricsLevel:
+        - node
+        - process
+        - container
+        - vm
+  
+  # Web server configuration
+  web:
+    configFile: ""
+    listenAddresses:
+      - :28282
+    tlsConfig: ""  # Configure TLS for production
+  
+  # Debug configuration (disabled in production)
+  debug:
+    pprof:
+      enabled: false
+  
+  # Kubernetes integration - ENABLED for production
+  kube:
+    enabled: true
+    config: ""  # Use in-cluster config
+    nodeName: ""  # Will be set by DaemonSet
+  
+  # Development/testing features (disabled in production)
+  dev:
+    fake-cpu-meter:
+      enabled: false  # Use real hardware monitoring
+      zones: []
+
+# Service Monitor for Prometheus integration
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    app: kepler
+    monitoring: prometheus
+
+# DaemonSet configuration
+daemonset:
+  # Enable host PID namespace for system monitoring
+  hostPID: true
+  
+  # Tolerations to run on all nodes including control plane
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+    - key: CriticalAddonsOnly
+      operator: Exists
+    - effect: NoExecute
+      operator: Exists
+  
+  # Node selector for specific node types if needed
+  nodeSelector:
+    # kubernetes.io/os: linux
+    # node-type: monitoring-enabled
+  
+  # Security context - restrictive for production
+  securityContext:
+    runAsNonRoot: false  # Needs root for hardware access
+    runAsUser: 0
+    privileged: true  # Required for hardware monitoring
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: true
+    capabilities:
+      add:
+        - SYS_ADMIN
+        - SYS_PTRACE
+        - DAC_READ_SEARCH
+      drop:
+        - ALL
+  
+  # Resource limits (production sizing)
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  
+  # Volume mounts for host system access
+  extraVolumes:
+    - name: proc
+      hostPath:
+        path: /proc
+        type: Directory
+    - name: sys
+      hostPath:
+        path: /sys
+        type: Directory
+    - name: dev-cpu-dma-latency
+      hostPath:
+        path: /dev/cpu_dma_latency
+        type: CharDevice
+    - name: tmp
+      emptyDir: {}
+  
+  extraVolumeMounts:
+    - name: proc
+      mountPath: /host/proc
+      readOnly: true
+    - name: sys
+      mountPath: /host/sys
+      readOnly: true
+    - name: dev-cpu-dma-latency
+      mountPath: /dev/cpu_dma_latency
+      readOnly: true
+    - name: tmp
+      mountPath: /tmp
+  
+  # Environment variables
+  env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: KEPLER_LOG_LEVEL
+      value: "3"
+  
+  # Liveness and readiness probes
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 28282
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /metrics
+      port: 28282
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 28282
+  targetPort: 28282
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "28282"
+    prometheus.io/path: "/metrics"
+
+# RBAC - comprehensive permissions for production
+rbac:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["nodes", "nodes/metrics", "nodes/proxy", "nodes/stats"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["metrics.k8s.io"]
+      resources: ["nodes", "pods"]
+      verbs: ["get", "list"]
+
+# Service Account
+serviceAccount:
+  create: true
+  name: kepler
+  annotations:
+    # Add annotations for cloud provider integrations if needed
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/kepler-role
+
+# Pod Security Policy (if using PSP)
+podSecurityPolicy:
+  enabled: false  # Enable if your cluster uses PSP
+  
+# Network Policy (optional)
+networkPolicy:
+  enabled: false  # Enable for network isolation
+  
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Priority Class for scheduling
+priorityClassName: "system-node-critical" 
