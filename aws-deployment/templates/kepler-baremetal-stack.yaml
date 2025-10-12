@@ -1,0 +1,411 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation stack for Kepler on bare-metal EC2 with Kind cluster'
+
+Parameters:
+  InstanceType:
+    Description: EC2 instance type (bare-metal)
+    Type: String
+    Default: c5.metal
+    AllowedValues:
+      - c5.metal
+      - m5.metal
+      - m5d.metal
+      - r5.metal
+    ConstraintDescription: Must be a valid bare-metal instance type
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+
+  SSHLocation:
+    Description: IP address range that can SSH to the EC2 instance
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
+
+  VolumeSize:
+    Description: EBS Volume size in GB
+    Type: Number
+    Default: 100
+    MinValue: 50
+    MaxValue: 500
+
+  VpcId:
+    Description: VPC ID for security group
+    Type: AWS::EC2::VPC::Id
+    ConstraintDescription: Must be a valid VPC ID
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Instance Configuration"
+        Parameters:
+          - InstanceType
+          - KeyName
+          - VolumeSize
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - SSHLocation
+
+Resources:
+  # Security Group
+  KeplerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: kepler-kind-security-group
+      GroupDescription: Security group for Kepler Kind cluster on bare-metal
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 6443
+          ToPort: 6443
+          CidrIp: !Ref SSHLocation
+          Description: Kubernetes API Server
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+        - IpProtocol: tcp
+          FromPort: 28282
+          ToPort: 28282
+          CidrIp: !Ref SSHLocation
+          Description: Kepler Metrics
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: kepler-kind-sg
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+  # IAM Role for EC2 (optional but useful for CloudWatch logs)
+  KeplerEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: kepler-ec2-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: kepler-ec2-role
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+  KeplerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: kepler-instance-profile
+      Roles:
+        - !Ref KeplerEC2Role
+
+  # EC2 Instance
+  KeplerBareMetalInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Sub '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref KeplerInstanceProfile
+      SecurityGroupIds:
+        - !Ref KeplerSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref VolumeSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+            Encrypted: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+
+          # Log all output
+          exec > >(tee /var/log/user-data.log)
+          exec 2>&1
+
+          echo "Starting setup at $(date)"
+
+          # Update system
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+          # Install dependencies
+          apt-get install -y \
+              apt-transport-https \
+              ca-certificates \
+              curl \
+              gnupg \
+              lsb-release \
+              software-properties-common \
+              jq \
+              git \
+              make \
+              unzip \
+              wget
+
+          # Install Docker
+          echo "Installing Docker..."
+          curl -fsSL https://get.docker.com -o get-docker.sh
+          sh get-docker.sh
+          usermod -aG docker ubuntu
+          systemctl enable docker
+          systemctl start docker
+          rm get-docker.sh
+
+          # Install kubectl
+          echo "Installing kubectl..."
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+          rm kubectl
+
+          # Install Helm
+          echo "Installing Helm..."
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+          # Install Kind
+          echo "Installing Kind..."
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.25.0/kind-linux-amd64
+          chmod +x ./kind
+          mv ./kind /usr/local/bin/kind
+
+          # Create Kind configuration file
+          cat > /home/ubuntu/kind-config.yaml << 'KINDEOF'
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+            extraMounts:
+            - hostPath: /sys
+              containerPath: /sys
+              readOnly: true
+            - hostPath: /proc
+              containerPath: /proc
+              readOnly: true
+            extraPortMappings:
+            - containerPort: 28282
+              hostPort: 28282
+              protocol: TCP
+          KINDEOF
+
+          # Create Kepler setup script
+          cat > /home/ubuntu/setup-kepler.sh << 'EOF'
+          #!/bin/bash
+          set -e
+
+          echo "========================================="
+          echo "Setting up Kind cluster with Kepler"
+          echo "========================================="
+
+          # Check if kind cluster already exists
+          if kind get clusters 2>/dev/null | grep -q "^kepler-cluster$"; then
+              echo "Kind cluster 'kepler-cluster' already exists. Deleting..."
+              kind delete cluster --name kepler-cluster
+          fi
+
+          echo "Creating Kind cluster..."
+          kind create cluster --name kepler-cluster --config /home/ubuntu/kind-config.yaml
+
+          echo "Waiting for cluster to be ready..."
+          kubectl wait --for=condition=ready node --all --timeout=300s
+
+          echo "Installing cert-manager..."
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml
+
+          echo "Waiting for cert-manager to be ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
+
+          echo "Installing Kepler Operator..."
+          helm install kepler-operator \
+            oci://quay.io/sustainable_computing_io/charts/kepler-operator \
+            --namespace kepler-operator \
+            --create-namespace \
+            --wait \
+            --timeout 10m
+
+          echo "Waiting for Kepler Operator to be ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=kepler-operator -n kepler-operator --timeout=300s
+
+          echo ""
+          echo "========================================="
+          echo "Setup complete!"
+          echo "========================================="
+          echo ""
+          echo "Cluster info:"
+          kubectl cluster-info
+          echo ""
+          echo "All pods:"
+          kubectl get pods -A
+          echo ""
+          echo "To access Kepler metrics:"
+          echo "kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282"
+          echo "Then visit: http://localhost:28282/metrics"
+          EOF
+
+          # Create cleanup script
+          cat > /home/ubuntu/cleanup-cluster.sh << 'EOF'
+          #!/bin/bash
+          echo "Deleting Kind cluster..."
+          kind delete cluster --name kepler-cluster
+          echo "Cluster deleted successfully!"
+          EOF
+
+          # Create useful aliases and environment setup
+          cat > /home/ubuntu/.bash_aliases << 'EOF'
+          alias k='kubectl'
+          alias kgp='kubectl get pods -A'
+          alias kgn='kubectl get nodes'
+          alias klogs='kubectl logs -f'
+          alias kdesc='kubectl describe'
+          export KUBECONFIG=/home/ubuntu/.kube/config
+          EOF
+
+          # Set ownership
+          chown ubuntu:ubuntu /home/ubuntu/kind-config.yaml
+          chown ubuntu:ubuntu /home/ubuntu/setup-kepler.sh
+          chown ubuntu:ubuntu /home/ubuntu/cleanup-cluster.sh
+          chown ubuntu:ubuntu /home/ubuntu/.bash_aliases
+          chmod +x /home/ubuntu/setup-kepler.sh
+          chmod +x /home/ubuntu/cleanup-cluster.sh
+
+          # Create README for the user
+          cat > /home/ubuntu/README.md << 'EOF'
+          # Kepler Bare-Metal Demo Environment
+
+          ## Quick Start
+
+          1. **Setup the cluster and install Kepler:**
+             ```bash
+             ./setup-kepler.sh
+             ```
+
+          2. **Check cluster status:**
+             ```bash
+             kubectl get nodes
+             kubectl get pods -A
+             ```
+
+          3. **Access Kepler metrics:**
+             ```bash
+             kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282 &
+             curl http://localhost:28282/metrics | grep kepler
+             ```
+
+          4. **Cleanup (delete cluster):**
+             ```bash
+             ./cleanup-cluster.sh
+             ```
+
+          ## Installed Tools
+          - Docker
+          - kubectl
+          - Helm
+          - Kind
+
+          ## Configuration Files
+          - `kind-config.yaml` - Kind cluster configuration
+          - `setup-kepler.sh` - Automated setup script
+          - `cleanup-cluster.sh` - Cleanup script
+
+          ## Useful Commands
+          - `k` - alias for kubectl
+          - `kgp` - get all pods
+          - `kgn` - get nodes
+
+          ## Important Notes
+          - This is a **bare-metal instance** with RAPL support
+          - Kepler will provide **real power consumption metrics**
+          - Remember to **stop or terminate** the instance when not in use to save credits
+
+          ## Cost Monitoring
+          Check your AWS billing dashboard regularly!
+          EOF
+
+          chown ubuntu:ubuntu /home/ubuntu/README.md
+
+          # Create a completion marker
+          echo "Setup completed at $(date)" > /var/log/user-data-complete.log
+
+          echo "User data script completed successfully at $(date)"
+      Tags:
+        - Key: Name
+          Value: kepler-baremetal-server
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+        - Key: Purpose
+          Value: Kepler-Demo
+
+  # Elastic IP for consistent access
+  KeplerEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref KeplerBareMetalInstance
+      Tags:
+        - Key: Name
+          Value: kepler-baremetal-eip
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+Outputs:
+  InstanceId:
+    Description: Instance ID of the bare-metal server
+    Value: !Ref KeplerBareMetalInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
+
+  PublicIP:
+    Description: Public IP address of the server
+    Value: !Ref KeplerEIP
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicIP'
+
+  SSHCommand:
+    Description: SSH command to connect to the server
+    Value: !Sub 'ssh -i ~/.ssh/${KeyName}.pem ubuntu@${KeplerEIP}'
+
+  InstanceType:
+    Description: Instance type used
+    Value: !Ref InstanceType
+
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !Ref KeplerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  SetupInstructions:
+    Description: Next steps after instance is ready
+    Value: |
+      1. SSH into the instance using the command above
+      2. Wait for setup to complete: tail -f /var/log/user-data.log
+      3. Run: ./setup-kepler.sh
+      4. Check README.md for more details
+
+  CostEstimate:
+    Description: Approximate hourly cost
+    Value: !Sub 'Instance ${InstanceType} costs approximately $4-6/hour in us-east-1'

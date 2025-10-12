@@ -205,3 +205,44 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.ico
+
+# PDF files
+*.pdf
+
+# Microsoft Office files
+*.docx
+*.doc
+*.pptx
+*.ppt
+*.xlsx
+*.xls
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# AWS and sensitive files
+*.pem
+*.key
+.aws/credentials
+*credentials*
+*.tfstate
+*.tfstate.*
+
+# CloudFormation outputs
+cloudformation-outputs.json
+stack-outputs.json
