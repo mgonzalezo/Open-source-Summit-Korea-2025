@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: korea-compliance-data
+  namespace: carbon-mcp
+  labels:
+    app: carbon-mcp-server
+data:
+  carbon-intensity.json: |
+    {
+      "region": "ap-northeast-2",
+      "region_name": "Seoul, Korea",
+      "average_gCO2eq_kWh": 424,
+      "grid_mix": {
+        "coal": 35,
+        "natural_gas": 28,
+        "nuclear": 25,
+        "renewable": 12
+      },
+      "cleanest_hours": [2, 3, 4],
+      "dirtiest_hours": [12, 13, 14, 15, 16]
+    }
+
+  regulations.json: |
+    {
+      "korea_carbon_neutrality": {
+        "code": "KR_CARBON_2050",
+        "name": "Framework Act on Carbon Neutrality and Green Growth",
+        "name_local": "탄소중립 녹색성장 기본법",
+        "target_year": 2050,
+        "grid_carbon_intensity_gco2_kwh": 424
+      },
+      "korea_pue_standard": {
+        "code": "KR_PUE_GREEN_DC",
+        "name": "Energy Use Rationalization Act - Green Data Center",
+        "name_local": "에너지이용 합리화법 - 그린 데이터센터",
+        "target_pue": 1.4
+      }
+    }
+
+  regions.json: |
+    {
+      "ap-northeast-2": {"average_gco2_kwh": 424, "region_name": "Seoul, Korea"},
+      "us-east-1": {"average_gco2_kwh": 450, "region_name": "Virginia, USA"},
+      "eu-north-1": {"average_gco2_kwh": 50, "region_name": "Stockholm, Sweden"}
+    }

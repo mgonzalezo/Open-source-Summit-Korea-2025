@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbon-mcp-server
+  namespace: carbon-mcp
+  labels:
+    app: carbon-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carbon-mcp-server
+  template:
+    metadata:
+      labels:
+        app: carbon-mcp-server
+    spec:
+      serviceAccountName: carbon-mcp-sa
+      containers:
+      - name: mcp-server
+        image: your-registry/carbon-kepler-mcp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: KEPLER_ENDPOINT
+          value: "https://kepler-https-proxy.kepler-system.svc.cluster.local:443/metrics"
+        - name: KOREA_CARBON_INTENSITY
+          value: "424"
+        - name: KOREA_PUE_TARGET
+          value: "1.4"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: compliance-data
+          mountPath: /app/config
+          readOnly: true
+      volumes:
+      - name: compliance-data
+        configMap:
+          name: korea-compliance-data

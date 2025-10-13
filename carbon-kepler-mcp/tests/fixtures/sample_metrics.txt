@@ -1,0 +1,29 @@
+# HELP kepler_pod_cpu_watts Pod CPU watts
+# TYPE kepler_pod_cpu_watts gauge
+kepler_pod_cpu_watts{pod="kepler",namespace="kepler-system"} 25.5
+kepler_pod_cpu_watts{pod="ml-training-job",namespace="ai-team"} 45.2
+kepler_pod_cpu_watts{pod="web-app",namespace="production"} 12.3
+
+# HELP kepler_pod_memory_watts Pod memory watts
+# TYPE kepler_pod_memory_watts gauge
+kepler_pod_memory_watts{pod="kepler",namespace="kepler-system"} 8.2
+kepler_pod_memory_watts{pod="ml-training-job",namespace="ai-team"} 12.3
+kepler_pod_memory_watts{pod="web-app",namespace="production"} 5.1
+
+# HELP kepler_pod_gpu_watts Pod GPU watts
+# TYPE kepler_pod_gpu_watts gauge
+kepler_pod_gpu_watts{pod="kepler",namespace="kepler-system"} 0.0
+kepler_pod_gpu_watts{pod="ml-training-job",namespace="ai-team"} 0.0
+kepler_pod_gpu_watts{pod="web-app",namespace="production"} 0.0
+
+# HELP kepler_node_cpu_watts Node CPU watts
+# TYPE kepler_node_cpu_watts gauge
+kepler_node_cpu_watts 125.8
+
+# HELP kepler_node_memory_watts Node memory watts
+# TYPE kepler_node_memory_watts gauge
+kepler_node_memory_watts 45.2
+
+# HELP kepler_node_cpu_usage_ratio Node CPU usage ratio
+# TYPE kepler_node_cpu_usage_ratio gauge
+kepler_node_cpu_usage_ratio 0.35

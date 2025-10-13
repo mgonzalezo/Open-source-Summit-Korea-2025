@@ -1,0 +1,33 @@
+{
+  "korea_carbon_neutrality": {
+    "code": "KR_CARBON_2050",
+    "name": "Framework Act on Carbon Neutrality and Green Growth",
+    "name_local": "탄소중립 녹색성장 기본법",
+    "enacted_date": "2021-09-24",
+    "target_year": 2050,
+    "interim_target": {
+      "year": 2030,
+      "reduction_percent": 35,
+      "baseline_year": 2018
+    },
+    "grid_carbon_intensity_gco2_kwh": 424,
+    "description": "South Korea's comprehensive framework for achieving carbon neutrality by 2050 with interim reduction targets.",
+    "reference_url": "https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=230613"
+  },
+  "korea_pue_standard": {
+    "code": "KR_PUE_GREEN_DC",
+    "name": "Energy Use Rationalization Act - Green Data Center",
+    "name_local": "에너지이용 합리화법 - 그린 데이터센터",
+    "ministry": "Ministry of Trade, Industry and Energy (MOTIE)",
+    "target_pue": 1.4,
+    "baseline_pue": 1.8,
+    "certification_level": "Green Data Center Certification",
+    "description": "Korean government initiative to improve data center energy efficiency through PUE requirements.",
+    "reference_url": "https://www.law.go.kr/법령/에너지이용합리화법",
+    "benefits": [
+      "Tax incentives for certified green data centers",
+      "Priority in government procurement",
+      "Public recognition and marketing value"
+    ]
+  }
+}

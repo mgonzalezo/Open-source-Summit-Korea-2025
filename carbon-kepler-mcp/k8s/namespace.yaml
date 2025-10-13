@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: carbon-mcp
+  labels:
+    name: carbon-mcp
+    project: kepler-oss-korea-2025

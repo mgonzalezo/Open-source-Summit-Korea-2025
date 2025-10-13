@@ -1,0 +1,43 @@
+{
+  "region": "ap-northeast-2",
+  "region_name": "Seoul, Korea",
+  "average_gCO2eq_kWh": 424,
+  "grid_mix": {
+    "coal": 35,
+    "natural_gas": 28,
+    "nuclear": 25,
+    "renewable": 12
+  },
+  "hourly_profile": [
+    {"hour": 0, "intensity": 380, "description": "Night - Low demand"},
+    {"hour": 1, "intensity": 375, "description": "Night - Low demand"},
+    {"hour": 2, "intensity": 370, "description": "Night - Cleanest"},
+    {"hour": 3, "intensity": 365, "description": "Night - Cleanest"},
+    {"hour": 4, "intensity": 370, "description": "Night - Cleanest"},
+    {"hour": 5, "intensity": 380, "description": "Early morning"},
+    {"hour": 6, "intensity": 390, "description": "Morning ramp-up"},
+    {"hour": 7, "intensity": 410, "description": "Morning peak starts"},
+    {"hour": 8, "intensity": 430, "description": "Morning peak"},
+    {"hour": 9, "intensity": 445, "description": "Morning peak"},
+    {"hour": 10, "intensity": 455, "description": "Mid-day peak"},
+    {"hour": 11, "intensity": 460, "description": "Mid-day peak"},
+    {"hour": 12, "intensity": 465, "description": "Afternoon peak"},
+    {"hour": 13, "intensity": 470, "description": "Afternoon peak"},
+    {"hour": 14, "intensity": 475, "description": "Afternoon peak - Dirtiest"},
+    {"hour": 15, "intensity": 470, "description": "Afternoon peak"},
+    {"hour": 16, "intensity": 465, "description": "Afternoon peak"},
+    {"hour": 17, "intensity": 460, "description": "Evening transition"},
+    {"hour": 18, "intensity": 450, "description": "Evening decline"},
+    {"hour": 19, "intensity": 440, "description": "Evening decline"},
+    {"hour": 20, "intensity": 425, "description": "Evening"},
+    {"hour": 21, "intensity": 410, "description": "Late evening"},
+    {"hour": 22, "intensity": 400, "description": "Late evening"},
+    {"hour": 23, "intensity": 390, "description": "Night transition"}
+  ],
+  "cleanest_hours": [2, 3, 4],
+  "dirtiest_hours": [12, 13, 14, 15, 16],
+  "metadata": {
+    "source": "Korean grid average 2024",
+    "note": "Hourly profile is estimated based on typical demand patterns"
+  }
+}

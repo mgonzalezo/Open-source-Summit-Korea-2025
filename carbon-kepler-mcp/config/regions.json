@@ -1,0 +1,53 @@
+{
+  "regions": {
+    "ap-northeast-2": {
+      "region_name": "Seoul, Korea",
+      "country": "South Korea",
+      "average_gco2_kwh": 424,
+      "grid_mix": {"coal": 35, "natural_gas": 28, "nuclear": 25, "renewable": 12},
+      "compliance_standard": "KR_CARBON_2050"
+    },
+    "ap-northeast-1": {
+      "region_name": "Tokyo, Japan",
+      "country": "Japan",
+      "average_gco2_kwh": 480,
+      "grid_mix": {"coal": 30, "natural_gas": 40, "nuclear": 15, "renewable": 15},
+      "compliance_standard": "JP_CARBON_2050"
+    },
+    "ap-southeast-1": {
+      "region_name": "Singapore",
+      "country": "Singapore",
+      "average_gco2_kwh": 650,
+      "grid_mix": {"coal": 2, "natural_gas": 95, "renewable": 3},
+      "compliance_standard": "SG_GREEN_PLAN"
+    },
+    "us-east-1": {
+      "region_name": "Virginia, USA",
+      "country": "United States",
+      "average_gco2_kwh": 450,
+      "grid_mix": {"coal": 20, "natural_gas": 40, "nuclear": 25, "renewable": 15},
+      "compliance_standard": "US_EPA_ENERGY_STAR"
+    },
+    "us-west-2": {
+      "region_name": "Oregon, USA",
+      "country": "United States",
+      "average_gco2_kwh": 200,
+      "grid_mix": {"coal": 5, "natural_gas": 15, "nuclear": 10, "renewable": 70},
+      "compliance_standard": "US_EPA_ENERGY_STAR"
+    },
+    "eu-north-1": {
+      "region_name": "Stockholm, Sweden",
+      "country": "Sweden",
+      "average_gco2_kwh": 50,
+      "grid_mix": {"coal": 0, "natural_gas": 5, "nuclear": 35, "renewable": 60},
+      "compliance_standard": "EU_CODE_OF_CONDUCT"
+    },
+    "eu-central-1": {
+      "region_name": "Frankfurt, Germany",
+      "country": "Germany",
+      "average_gco2_kwh": 350,
+      "grid_mix": {"coal": 25, "natural_gas": 15, "nuclear": 10, "renewable": 50},
+      "compliance_standard": "EU_CODE_OF_CONDUCT"
+    }
+  }
+}
