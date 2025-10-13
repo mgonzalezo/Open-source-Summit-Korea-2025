@@ -1,0 +1,194 @@
+==========================================
+Kepler Bare-Metal with K3s - DEPLOYED
+==========================================
+
+Deployed: 2025-10-12
+Stack Name: kepler-k3s-stack
+Region: us-east-1
+Cluster Type: K3s (Lightweight Kubernetes)
+
+==========================================
+Instance Details
+==========================================
+
+Instance ID:    i-0696d63a54879a1c6
+Instance Type:  c5.metal (96 vCPUs, 192 GB RAM)
+Public IP:      98.89.175.99
+SSH Key:        oss-korea
+
+==========================================
+SSH Connection
+==========================================
+
+ssh -i ~/.ssh/oss-korea.pem ubuntu@98.89.175.99
+
+==========================================
+Why K3s Instead of Kind?
+==========================================
+
+✓ K3s is designed for bare-metal and edge
+✓ No AppArmor conflicts
+✓ Lighter weight (~100MB vs ~500MB)
+✓ Production-ready single binary
+✓ Faster startup time
+✓ Better resource efficiency
+✓ Still provides real RAPL monitoring
+
+==========================================
+Setup Steps
+==========================================
+
+1. Wait 2-3 minutes for K3s installation
+
+2. SSH to instance:
+   ssh -i ~/.ssh/oss-korea.pem ubuntu@98.89.175.99
+
+3. Monitor initial setup:
+   tail -f /var/log/user-data.log
+   (Press Ctrl+C when complete)
+
+4. Verify K3s is running:
+   sudo systemctl status k3s
+   kubectl get nodes
+
+5. Run Kepler setup:
+   ./setup-kepler.sh
+   (Takes ~3-5 minutes)
+
+6. Verify installation:
+   kubectl get pods -A
+
+7. Access Kepler metrics:
+   kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282 &
+   curl http://localhost:28282/metrics | grep kepler
+
+==========================================
+K3s Management Commands
+==========================================
+
+Check K3s status:
+  sudo systemctl status k3s
+
+Restart K3s:
+  sudo systemctl restart k3s
+
+View K3s logs:
+  sudo journalctl -u k3s -f
+
+Stop K3s:
+  sudo systemctl stop k3s
+
+Start K3s:
+  sudo systemctl start k3s
+
+==========================================
+Stack Management (from your local machine)
+==========================================
+
+Check status:
+  cd aws-deployment/scripts
+  # Update script to use kepler-k3s-stack
+  aws cloudformation describe-stacks \
+    --stack-name kepler-k3s-stack \
+    --region us-east-1 \
+    --profile mgonzalezo
+
+Stop instance (save $4.08/hour):
+  aws ec2 stop-instances \
+    --instance-ids i-0696d63a54879a1c6 \
+    --region us-east-1 \
+    --profile mgonzalezo
+
+Start instance:
+  aws ec2 start-instances \
+    --instance-ids i-0696d63a54879a1c6 \
+    --region us-east-1 \
+    --profile mgonzalezo
+
+Delete stack:
+  aws cloudformation delete-stack \
+    --stack-name kepler-k3s-stack \
+    --region us-east-1 \
+    --profile mgonzalezo
+
+==========================================
+Files on Instance
+==========================================
+
+/home/ubuntu/setup-kepler.sh      - Install cert-manager + Kepler
+/home/ubuntu/cleanup-kepler.sh    - Uninstall Kepler
+/home/ubuntu/.kube/config         - kubectl config
+/home/ubuntu/README.md            - Quick reference
+/home/ubuntu/.bash_aliases        - Helpful aliases
+/var/log/user-data.log           - Setup log
+/etc/rancher/k3s/k3s.yaml        - K3s config
+
+==========================================
+Helpful Aliases
+==========================================
+
+k       - kubectl
+kgp     - kubectl get pods -A
+kgn     - kubectl get nodes
+klogs   - kubectl logs -f
+kdesc   - kubectl describe
+
+==========================================
+Cost Information
+==========================================
+
+Hourly Rate:  ~$4.08/hour
+Daily Rate:   ~$97.92/day
+Your Credits: $344.70
+Runtime:      ~84 hours (~3.5 days)
+
+IMPORTANT: Stop or delete when not in use!
+
+==========================================
+Troubleshooting
+==========================================
+
+If K3s not running:
+  sudo systemctl status k3s
+  sudo journalctl -u k3s -n 50
+
+If kubectl not working:
+  export KUBECONFIG=/home/ubuntu/.kube/config
+
+If Kepler setup fails:
+  kubectl get pods -A
+  kubectl logs -n kepler-operator -l app.kubernetes.io/name=kepler-operator
+
+Check RAPL availability:
+  ls -la /sys/class/powercap/
+  ls -la /sys/class/powercap/intel-rapl/
+
+==========================================
+What's Different from Kind Setup?
+==========================================
+
+KIND ISSUES:
+  ✗ AppArmor conflicts on bare-metal
+  ✗ Nested containers complexity
+  ✗ Docker-in-Docker overhead
+  ✗ Designed for local development
+
+K3S ADVANTAGES:
+  ✓ Native bare-metal support
+  ✓ No AppArmor conflicts
+  ✓ Single-node optimized
+  ✓ Production-ready
+  ✓ Automatic RBAC setup
+  ✓ Built-in service load balancer
+
+==========================================
+REMEMBER
+==========================================
+
+✓ This is BARE-METAL with real RAPL
+✓ K3s is production-grade Kubernetes
+✓ Stop instance when not using
+✓ You have ~84 hours with your credits
+✓ Delete stack after presentation
+
+==========================================

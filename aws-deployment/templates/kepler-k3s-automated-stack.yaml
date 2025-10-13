@@ -1,0 +1,748 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation stack for Kepler on bare-metal EC2 with K3s - Fully Automated with Model Server'
+
+Parameters:
+  InstanceType:
+    Description: EC2 instance type (bare-metal)
+    Type: String
+    Default: c5.metal
+    AllowedValues:
+      - c5.metal
+      - m5.metal
+      - m5d.metal
+      - r5.metal
+    ConstraintDescription: Must be a valid bare-metal instance type
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+
+  SSHLocation:
+    Description: IP address range that can SSH to the EC2 instance
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
+
+  VolumeSize:
+    Description: EBS Volume size in GB
+    Type: Number
+    Default: 100
+    MinValue: 50
+    MaxValue: 500
+
+  VpcId:
+    Description: VPC ID for security group
+    Type: AWS::EC2::VPC::Id
+    ConstraintDescription: Must be a valid VPC ID
+
+  AutoInstallKepler:
+    Description: Automatically install Kepler with Model Server on boot
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Instance Configuration"
+        Parameters:
+          - InstanceType
+          - KeyName
+          - VolumeSize
+          - AutoInstallKepler
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcId
+          - SSHLocation
+
+Resources:
+  # Security Group with all required ports
+  KeplerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: kepler-k3s-security-group
+      GroupDescription: Security group for Kepler K3s cluster with Model Server
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 6443
+          ToPort: 6443
+          CidrIp: !Ref SSHLocation
+          Description: Kubernetes API Server
+        - IpProtocol: tcp
+          FromPort: 30080
+          ToPort: 30080
+          CidrIp: 0.0.0.0/0
+          Description: Kepler HTTP Metrics
+        - IpProtocol: tcp
+          FromPort: 30443
+          ToPort: 30443
+          CidrIp: 0.0.0.0/0
+          Description: Kepler HTTPS Metrics (NodePort)
+        - IpProtocol: tcp
+          FromPort: 28282
+          ToPort: 28282
+          CidrIp: !Ref SSHLocation
+          Description: Kepler Internal Metrics
+        - IpProtocol: tcp
+          FromPort: 8100
+          ToPort: 8100
+          CidrIp: !Ref SSHLocation
+          Description: Kepler Model Server
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-sg
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+  # IAM Role for EC2
+  KeplerEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: kepler-k3s-ec2-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-ec2-role
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+  KeplerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: kepler-k3s-instance-profile
+      Roles:
+        - !Ref KeplerEC2Role
+
+  # EC2 Instance with automated Kepler setup
+  KeplerBareMetalInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Sub '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref KeplerInstanceProfile
+      SecurityGroupIds:
+        - !Ref KeplerSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref VolumeSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+            Encrypted: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+
+          # Log all output
+          exec > >(tee /var/log/user-data.log)
+          exec 2>&1
+
+          echo "========================================="
+          echo "Starting Kepler K3s Setup"
+          echo "Time: $(date)"
+          echo "========================================="
+
+          # Update system
+          echo "Updating system..."
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+          # Install dependencies
+          echo "Installing dependencies..."
+          apt-get install -y \
+              curl \
+              wget \
+              git \
+              jq \
+              unzip \
+              make \
+              msr-tools \
+              linux-tools-common \
+              linux-tools-generic
+
+          # Install K3s
+          echo "Installing K3s..."
+          curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --disable traefik" sh -
+
+          # Wait for K3s to be ready
+          echo "Waiting for K3s to be ready..."
+          sleep 30
+          until kubectl get nodes 2>/dev/null; do
+            echo "Waiting for K3s..."
+            sleep 5
+          done
+
+          # Setup kubectl for ubuntu user
+          mkdir -p /home/ubuntu/.kube
+          cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+          chown -R ubuntu:ubuntu /home/ubuntu/.kube
+          chmod 600 /home/ubuntu/.kube/config
+
+          # Install Helm
+          echo "Installing Helm..."
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+          # Install kustomize
+          echo "Installing kustomize..."
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          mv kustomize /usr/local/bin/
+
+          # Create automated Kepler setup script with Model Server
+          cat > /home/ubuntu/setup-kepler-automated.sh << 'EOFSETUP'
+          #!/bin/bash
+          set -e
+
+          echo "========================================="
+          echo "Automated Kepler + Model Server Setup"
+          echo "========================================="
+
+          export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+          # Wait for K3s
+          echo "Waiting for K3s to be fully ready..."
+          kubectl wait --for=condition=ready node --all --timeout=300s
+
+          # Install cert-manager
+          echo "Installing cert-manager v1.18.2..."
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml
+
+          echo "Waiting for cert-manager pods..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
+
+          # Download Kepler v0.11.2 Helm chart
+          echo "Downloading Kepler v0.11.2..."
+          cd /home/ubuntu
+          wget -q https://github.com/sustainable-computing-io/kepler/archive/refs/tags/v0.11.2.tar.gz
+          tar -xzf v0.11.2.tar.gz
+
+          # Create Helm values for Kepler with Model Server support
+          cat > /tmp/kepler-values.yaml << 'EOFVALUES'
+          image:
+            repository: quay.io/sustainable_computing_io/kepler
+            pullPolicy: Always
+            tag: v0.11.2
+
+          config:
+            log:
+              level: info
+              format: text
+            host:
+              sysfs: /host/sys
+              procfs: /host/proc
+            monitor:
+              interval: 5s
+              staleness: 500ms
+              maxTerminated: 500
+              minTerminatedEnergyThreshold: 10
+            rapl:
+              zones: []
+            exporter:
+              stdout:
+                enabled: false
+              prometheus:
+                enabled: true
+                debugCollectors:
+                  - go
+                metricsLevel:
+                  - node
+                  - pod
+                  - container
+                  - process
+            web:
+              configFile: ""
+              listenAddresses:
+                - :28282
+            debug:
+              pprof:
+                enabled: false
+            kube:
+              enabled: false
+              config: ""
+              nodeName: ""
+            dev:
+              fake-cpu-meter:
+                enabled: true
+                zones:
+                  - package-0
+            model:
+              enabled: true
+              server:
+                url: http://kepler-model-server.kepler-model-server.svc.cluster.local:8100
+              estimator:
+                enabled: true
+                select: true
+                sidecar: false
+
+          daemonset:
+            hostPID: true
+            tolerations:
+              - operator: Exists
+            securityContext:
+              privileged: true
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 1Gi
+              requests:
+                cpu: 200m
+                memory: 256Mi
+            extraVolumes:
+              - name: proc
+                hostPath:
+                  path: /proc
+                  type: Directory
+              - name: sys
+                hostPath:
+                  path: /sys
+                  type: Directory
+              - name: dev-cpu
+                hostPath:
+                  path: /dev/cpu
+                  type: Directory
+            extraVolumeMounts:
+              - name: proc
+                mountPath: /host/proc
+                readOnly: true
+              - name: sys
+                mountPath: /host/sys
+                readOnly: true
+              - name: dev-cpu
+                mountPath: /dev/cpu
+                readOnly: true
+
+          service:
+            type: ClusterIP
+            port: 28282
+            targetPort: 28282
+
+          rbac:
+            create: true
+
+          serviceAccount:
+            create: true
+            name: kepler
+          EOFVALUES
+
+          # Install Kepler via Helm
+          echo "Installing Kepler v0.11.2 via Helm..."
+          helm install kepler ./kepler-0.11.2/manifests/helm/kepler \
+            --namespace kepler-system \
+            --create-namespace \
+            -f /tmp/kepler-values.yaml \
+            --wait \
+            --timeout 10m
+
+          # Deploy Kepler Model Server
+          echo "Deploying Kepler Model Server..."
+          cat > /tmp/kepler-model-server.yaml << 'EOFMODEL'
+          ---
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: kepler-model-server
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: kepler-model-server
+            namespace: kepler-model-server
+            labels:
+              app.kubernetes.io/component: model-server
+              app.kubernetes.io/name: kepler-model-server
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app.kubernetes.io/component: model-server
+                app.kubernetes.io/name: kepler-model-server
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/component: model-server
+                  app.kubernetes.io/name: kepler-model-server
+              spec:
+                containers:
+                - name: server-api
+                  image: quay.io/sustainable_computing_io/kepler_model_server:latest
+                  imagePullPolicy: Always
+                  ports:
+                  - containerPort: 8100
+                    name: http
+                    protocol: TCP
+                  env:
+                  - name: MODEL_SERVER_PORT
+                    value: "8100"
+                  - name: MODEL_PATH
+                    value: "/mnt/models"
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 512Mi
+                    limits:
+                      cpu: 1000m
+                      memory: 2Gi
+                  volumeMounts:
+                  - name: mnt
+                    mountPath: /mnt
+                  - name: data
+                    mountPath: /data
+                volumes:
+                - name: mnt
+                  emptyDir: {}
+                - name: data
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: kepler-model-server
+            namespace: kepler-model-server
+            labels:
+              app.kubernetes.io/component: model-server
+              app.kubernetes.io/name: kepler-model-server
+          spec:
+            type: ClusterIP
+            selector:
+              app.kubernetes.io/component: model-server
+              app.kubernetes.io/name: kepler-model-server
+            ports:
+              - name: http
+                port: 8100
+                targetPort: http
+                protocol: TCP
+          EOFMODEL
+
+          kubectl apply -f /tmp/kepler-model-server.yaml
+
+          # Wait for Model Server
+          echo "Waiting for Model Server to be ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=kepler-model-server -n kepler-model-server --timeout=300s
+
+          # Restart Kepler pods to connect to Model Server
+          echo "Restarting Kepler pods to connect to Model Server..."
+          kubectl delete pod -n kepler-system -l app.kubernetes.io/name=kepler
+          sleep 20
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=kepler -n kepler-system --timeout=300s
+
+          # Deploy HTTPS Proxy for Kepler metrics
+          echo "Setting up HTTPS access for Kepler metrics..."
+
+          # Create self-signed certificate issuer
+          cat > /tmp/cert-issuer.yaml << 'EOFCERT'
+          ---
+          apiVersion: cert-manager.io/v1
+          kind: Issuer
+          metadata:
+            name: kepler-selfsigned-issuer
+            namespace: kepler-system
+          spec:
+            selfSigned: {}
+          ---
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          metadata:
+            name: kepler-tls
+            namespace: kepler-system
+          spec:
+            secretName: kepler-tls-secret
+            issuerRef:
+              name: kepler-selfsigned-issuer
+              kind: Issuer
+            dnsNames:
+              - kepler.local
+              - kepler.kepler-system.svc
+              - kepler.kepler-system.svc.cluster.local
+          EOFCERT
+
+          kubectl apply -f /tmp/cert-issuer.yaml
+
+          # Wait for certificate
+          sleep 10
+          kubectl wait --for=condition=ready certificate kepler-tls -n kepler-system --timeout=60s
+
+          # Deploy HTTPS proxy
+          cat > /tmp/kepler-https-proxy.yaml << 'EOFPROXY'
+          ---
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: kepler-nginx-config
+            namespace: kepler-system
+          data:
+            nginx.conf: |
+              events {
+                worker_connections 1024;
+              }
+
+              http {
+                server {
+                  listen 8443 ssl;
+                  server_name _;
+
+                  ssl_certificate /etc/nginx/ssl/tls.crt;
+                  ssl_certificate_key /etc/nginx/ssl/tls.key;
+                  ssl_protocols TLSv1.2 TLSv1.3;
+                  ssl_ciphers HIGH:!aNULL:!MD5;
+
+                  location / {
+                    proxy_pass http://kepler.kepler-system.svc.cluster.local:28282;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                  }
+                }
+              }
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: kepler-https-proxy
+            namespace: kepler-system
+            labels:
+              app: kepler-https-proxy
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: kepler-https-proxy
+            template:
+              metadata:
+                labels:
+                  app: kepler-https-proxy
+              spec:
+                containers:
+                - name: nginx
+                  image: nginx:alpine
+                  ports:
+                  - containerPort: 8443
+                    name: https
+                  volumeMounts:
+                  - name: nginx-config
+                    mountPath: /etc/nginx/nginx.conf
+                    subPath: nginx.conf
+                  - name: tls-cert
+                    mountPath: /etc/nginx/ssl
+                    readOnly: true
+                volumes:
+                - name: nginx-config
+                  configMap:
+                    name: kepler-nginx-config
+                - name: tls-cert
+                  secret:
+                    secretName: kepler-tls-secret
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: kepler-https
+            namespace: kepler-system
+            labels:
+              app: kepler-https-proxy
+          spec:
+            type: NodePort
+            selector:
+              app: kepler-https-proxy
+            ports:
+              - name: https
+                port: 8443
+                targetPort: 8443
+                nodePort: 30443
+                protocol: TCP
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: kepler-http
+            namespace: kepler-system
+          spec:
+            type: NodePort
+            selector:
+              app.kubernetes.io/name: kepler
+            ports:
+              - name: http
+                port: 28282
+                targetPort: 28282
+                nodePort: 30080
+                protocol: TCP
+          EOFPROXY
+
+          kubectl apply -f /tmp/kepler-https-proxy.yaml
+
+          # Wait for HTTPS proxy
+          kubectl wait --for=condition=ready pod -l app=kepler-https-proxy -n kepler-system --timeout=300s
+
+          echo ""
+          echo "========================================="
+          echo "✅ Setup Complete!"
+          echo "========================================="
+          echo ""
+          echo "Kepler Status:"
+          kubectl get pods -n kepler-system
+          echo ""
+          echo "Model Server Status:"
+          kubectl get pods -n kepler-model-server
+          echo ""
+          echo "Access Metrics:"
+          INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+          echo "  HTTPS: curl -k https://$INSTANCE_IP:30443/metrics"
+          echo "  HTTP:  curl http://$INSTANCE_IP:30080/metrics"
+          echo ""
+          echo "Deployment Summary saved to: /home/ubuntu/kepler-info.txt"
+
+          # Save deployment info
+          cat > /home/ubuntu/kepler-info.txt << EOFINFO
+          Kepler Deployment Information
+          ==============================
+
+          Instance IP: $INSTANCE_IP
+
+          HTTPS Metrics: https://$INSTANCE_IP:30443/metrics
+          HTTP Metrics:  http://$INSTANCE_IP:30080/metrics
+
+          Components:
+          - Kepler v0.11.2 (DaemonSet)
+          - Model Server (latest)
+          - HTTPS Proxy (Nginx)
+          - cert-manager v1.18.2
+
+          Configuration:
+          - Fake CPU meter: Enabled (for initialization)
+          - Model Server: Enabled (ML-based power estimation)
+          - Real metrics: eBPF CPU, memory, process tracking
+
+          Access:
+          kubectl get pods -n kepler-system
+          kubectl get pods -n kepler-model-server
+          kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler
+          kubectl logs -n kepler-model-server -l app.kubernetes.io/name=kepler-model-server
+
+          Test metrics:
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_cpu_usage_ratio
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_cpu_watts
+          EOFINFO
+
+          chown ubuntu:ubuntu /home/ubuntu/kepler-info.txt
+
+          EOFSETUP
+
+          chmod +x /home/ubuntu/setup-kepler-automated.sh
+          chown ubuntu:ubuntu /home/ubuntu/setup-kepler-automated.sh
+
+          # Create useful aliases
+          cat > /home/ubuntu/.bash_aliases << 'EOFALIAS'
+          alias k='kubectl'
+          alias kgp='kubectl get pods -A'
+          alias kgn='kubectl get nodes'
+          alias klogs='kubectl logs -f'
+          alias kdesc='kubectl describe'
+          export KUBECONFIG=/home/ubuntu/.kube/config
+          export PATH=$PATH:/usr/local/bin
+          EOFALIAS
+
+          chown ubuntu:ubuntu /home/ubuntu/.bash_aliases
+
+          # Auto-install if enabled
+          if [ "${AutoInstallKepler}" = "true" ]; then
+            echo "Auto-installing Kepler..."
+            sudo -u ubuntu bash /home/ubuntu/setup-kepler-automated.sh
+          fi
+
+          # Create completion marker
+          echo "Setup completed at $(date)" > /var/log/user-data-complete.log
+          echo "========================================="
+          echo "User data script completed!"
+          echo "========================================="
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-baremetal
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+        - Key: Purpose
+          Value: Kepler-Demo-Automated
+
+  # Elastic IP
+  KeplerEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref KeplerBareMetalInstance
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-eip
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+Outputs:
+  InstanceId:
+    Description: Instance ID of the bare-metal server
+    Value: !Ref KeplerBareMetalInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
+
+  PublicIP:
+    Description: Public IP address of the server
+    Value: !Ref KeplerEIP
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicIP'
+
+  SSHCommand:
+    Description: SSH command to connect to the server
+    Value: !Sub 'ssh -i ${KeyName}.pem ubuntu@${KeplerEIP}'
+
+  HTTPSMetricsURL:
+    Description: HTTPS URL for Kepler metrics (use -k flag with curl)
+    Value: !Sub 'https://${KeplerEIP}:30443/metrics'
+
+  HTTPMetricsURL:
+    Description: HTTP URL for Kepler metrics
+    Value: !Sub 'http://${KeplerEIP}:30080/metrics'
+
+  TestCommand:
+    Description: Test Kepler metrics endpoint
+    Value: !Sub 'curl -k https://${KeplerEIP}:30443/metrics | grep kepler_node'
+
+  SetupStatus:
+    Description: How to check setup status
+    Value: !Sub |
+      SSH Command: ssh -i ${KeyName}.pem ubuntu@${KeplerEIP}
+      Check logs: tail -f /var/log/user-data.log
+      Deployment info: cat /home/ubuntu/kepler-info.txt
+
+  InstanceType:
+    Description: Instance type used
+    Value: !Ref InstanceType
+
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !Ref KeplerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  CostEstimate:
+    Description: Approximate hourly cost
+    Value: !Sub 'Instance ${InstanceType} costs approximately $4.08/hour in us-east-1. Budget: $344.70 = ~84 hours'

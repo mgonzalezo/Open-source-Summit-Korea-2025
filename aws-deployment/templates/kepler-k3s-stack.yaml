@@ -1,0 +1,389 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation stack for Kepler on bare-metal EC2 with K3s cluster'
+
+Parameters:
+  InstanceType:
+    Description: EC2 instance type (bare-metal)
+    Type: String
+    Default: c5.metal
+    AllowedValues:
+      - c5.metal
+      - m5.metal
+      - m5d.metal
+      - r5.metal
+    ConstraintDescription: Must be a valid bare-metal instance type
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+
+  SSHLocation:
+    Description: IP address range that can SSH to the EC2 instance
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
+
+  VolumeSize:
+    Description: EBS Volume size in GB
+    Type: Number
+    Default: 100
+    MinValue: 50
+    MaxValue: 500
+
+  VpcId:
+    Description: VPC ID for security group
+    Type: AWS::EC2::VPC::Id
+    ConstraintDescription: Must be a valid VPC ID
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Instance Configuration"
+        Parameters:
+          - InstanceType
+          - KeyName
+          - VolumeSize
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcId
+          - SSHLocation
+
+Resources:
+  # Security Group
+  KeplerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: kepler-k3s-security-group
+      GroupDescription: Security group for Kepler K3s cluster on bare-metal
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 6443
+          ToPort: 6443
+          CidrIp: !Ref SSHLocation
+          Description: Kubernetes API Server
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+        - IpProtocol: tcp
+          FromPort: 28282
+          ToPort: 28282
+          CidrIp: !Ref SSHLocation
+          Description: Kepler Metrics
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-sg
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+  # IAM Role for EC2
+  KeplerEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: kepler-k3s-ec2-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-ec2-role
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+  KeplerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: kepler-k3s-instance-profile
+      Roles:
+        - !Ref KeplerEC2Role
+
+  # EC2 Instance
+  KeplerBareMetalInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Sub '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref KeplerInstanceProfile
+      SecurityGroupIds:
+        - !Ref KeplerSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref VolumeSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+            Encrypted: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+
+          # Log all output
+          exec > >(tee /var/log/user-data.log)
+          exec 2>&1
+
+          echo "Starting setup at $(date)"
+
+          # Update system
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+          # Install dependencies
+          apt-get install -y \
+              curl \
+              wget \
+              git \
+              jq \
+              unzip
+
+          # Install K3s (lightweight Kubernetes)
+          echo "Installing K3s..."
+          curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --disable traefik" sh -
+
+          # Wait for K3s to be ready
+          echo "Waiting for K3s to be ready..."
+          sleep 30
+          until kubectl get nodes 2>/dev/null; do
+            echo "Waiting for K3s..."
+            sleep 5
+          done
+
+          # Setup kubectl for ubuntu user
+          mkdir -p /home/ubuntu/.kube
+          cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+          chown -R ubuntu:ubuntu /home/ubuntu/.kube
+          chmod 600 /home/ubuntu/.kube/config
+
+          # Install Helm
+          echo "Installing Helm..."
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+          # Create Kepler setup script
+          cat > /home/ubuntu/setup-kepler.sh << 'EOF'
+          #!/bin/bash
+          set -e
+
+          echo "========================================="
+          echo "Installing Kepler on K3s"
+          echo "========================================="
+
+          export KUBECONFIG=/home/ubuntu/.kube/config
+
+          echo "Waiting for K3s to be fully ready..."
+          kubectl wait --for=condition=ready node --all --timeout=300s
+
+          echo "Installing cert-manager..."
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml
+
+          echo "Waiting for cert-manager to be ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
+
+          echo "Installing Kepler Operator..."
+          helm install kepler-operator \
+            oci://quay.io/sustainable_computing_io/charts/kepler-operator \
+            --namespace kepler-operator \
+            --create-namespace \
+            --wait \
+            --timeout 10m
+
+          echo "Waiting for Kepler Operator to be ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=kepler-operator -n kepler-operator --timeout=300s
+
+          echo ""
+          echo "========================================="
+          echo "Setup complete!"
+          echo "========================================="
+          echo ""
+          echo "Cluster info:"
+          kubectl cluster-info
+          echo ""
+          echo "All pods:"
+          kubectl get pods -A
+          echo ""
+          echo "To access Kepler metrics:"
+          echo "kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282"
+          echo "Then visit: http://localhost:28282/metrics"
+          EOF
+
+          # Create cleanup script
+          cat > /home/ubuntu/cleanup-kepler.sh << 'EOF'
+          #!/bin/bash
+          echo "Uninstalling Kepler..."
+          helm uninstall kepler-operator -n kepler-operator 2>/dev/null || true
+          kubectl delete namespace kepler-operator 2>/dev/null || true
+          kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml 2>/dev/null || true
+          echo "Kepler uninstalled"
+          EOF
+
+          # Create useful aliases and environment setup
+          cat > /home/ubuntu/.bash_aliases << 'EOF'
+          alias k='kubectl'
+          alias kgp='kubectl get pods -A'
+          alias kgn='kubectl get nodes'
+          alias klogs='kubectl logs -f'
+          alias kdesc='kubectl describe'
+          export KUBECONFIG=/home/ubuntu/.kube/config
+          export PATH=$PATH:/usr/local/bin
+          EOF
+
+          # Set ownership
+          chown ubuntu:ubuntu /home/ubuntu/setup-kepler.sh
+          chown ubuntu:ubuntu /home/ubuntu/cleanup-kepler.sh
+          chown ubuntu:ubuntu /home/ubuntu/.bash_aliases
+          chmod +x /home/ubuntu/setup-kepler.sh
+          chmod +x /home/ubuntu/cleanup-kepler.sh
+
+          # Create README for the user
+          cat > /home/ubuntu/README.md << 'EOF'
+          # Kepler Bare-Metal Demo Environment (K3s)
+
+          ## Quick Start
+
+          1. **Setup Kepler:**
+             ```bash
+             ./setup-kepler.sh
+             ```
+
+          2. **Check cluster status:**
+             ```bash
+             kubectl get nodes
+             kubectl get pods -A
+             ```
+
+          3. **Access Kepler metrics:**
+             ```bash
+             kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282 &
+             curl http://localhost:28282/metrics | grep kepler
+             ```
+
+          4. **Cleanup:**
+             ```bash
+             ./cleanup-kepler.sh
+             ```
+
+          ## Installed
+
+          - K3s (Lightweight Kubernetes)
+          - kubectl
+          - Helm
+
+          ## Configuration
+
+          - KUBECONFIG: /home/ubuntu/.kube/config
+          - K3s config: /etc/rancher/k3s/k3s.yaml
+
+          ## Useful Commands
+
+          - `k` - alias for kubectl
+          - `kgp` - get all pods
+          - `kgn` - get nodes
+          - `kubectl get all -A` - see everything
+
+          ## K3s Commands
+
+          - Check K3s status: `sudo systemctl status k3s`
+          - Restart K3s: `sudo systemctl restart k3s`
+          - K3s logs: `sudo journalctl -u k3s -f`
+
+          ## Important Notes
+
+          - This is a **bare-metal instance** with RAPL support
+          - K3s is lighter than Kind and works better on bare-metal
+          - Remember to **stop or terminate** when not in use
+          EOF
+
+          chown ubuntu:ubuntu /home/ubuntu/README.md
+
+          # Create a completion marker
+          echo "Setup completed at $(date)" > /var/log/user-data-complete.log
+
+          echo "User data script completed successfully at $(date)"
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-baremetal
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+        - Key: Purpose
+          Value: Kepler-Demo
+
+  # Elastic IP for consistent access
+  KeplerEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref KeplerBareMetalInstance
+      Tags:
+        - Key: Name
+          Value: kepler-k3s-eip
+        - Key: Project
+          Value: Kepler-OSS-Korea-2025
+
+Outputs:
+  InstanceId:
+    Description: Instance ID of the bare-metal server
+    Value: !Ref KeplerBareMetalInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
+
+  PublicIP:
+    Description: Public IP address of the server
+    Value: !Ref KeplerEIP
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicIP'
+
+  SSHCommand:
+    Description: SSH command to connect to the server
+    Value: !Sub 'ssh -i ~/.ssh/${KeyName}.pem ubuntu@${KeplerEIP}'
+
+  InstanceType:
+    Description: Instance type used
+    Value: !Ref InstanceType
+
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !Ref KeplerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  SetupInstructions:
+    Description: Next steps after instance is ready
+    Value: |
+      1. SSH into the instance using the command above
+      2. Wait for setup to complete: tail -f /var/log/user-data.log
+      3. Run: ./setup-kepler.sh
+      4. Check README.md for more details
+
+  ClusterType:
+    Description: Kubernetes distribution used
+    Value: K3s (Lightweight Kubernetes)
+
+  CostEstimate:
+    Description: Approximate hourly cost
+    Value: !Sub 'Instance ${InstanceType} costs approximately $4-6/hour in us-east-1'
