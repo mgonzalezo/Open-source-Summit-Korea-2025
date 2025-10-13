@@ -314,7 +314,7 @@ Same as before:
 ./deploy-automated-stack.sh
 
 # 2. While waiting, explain the architecture
-cat KEPLER-DEPLOYMENT-SUMMARY.md
+cat kepler-deployment-summary.md
 
 # 3. Once ready, show metrics
 curl -k https://<IP>:30443/metrics | grep kepler_node_cpu_usage_ratio
@@ -340,8 +340,8 @@ aws-deployment/
 │   ├── start-stack.sh                     # Works with both
 │   ├── delete-stack.sh                    # Works with both
 │   └── check-stack.sh                     # Works with both
-├── KEPLER-DEPLOYMENT-SUMMARY.md           # Detailed technical explanation
-├── AUTOMATED-DEPLOYMENT.md                # This file
+├── kepler-deployment-summary.md           # Detailed technical explanation
+├── automated-deployment.md                # This file
 └── README.md                              # General overview
 ```
 
@@ -352,7 +352,7 @@ aws-deployment/
 3. **Test**: Access metrics endpoint
 4. **Demo**: Deploy workload and watch power metrics
 5. **Stop**: `./stop-stack.sh` when done
-6. **Present**: Use KEPLER-DEPLOYMENT-SUMMARY.md for technical details
+6. **Present**: Use kepler-deployment-summary.md for technical details
 
 ---
 

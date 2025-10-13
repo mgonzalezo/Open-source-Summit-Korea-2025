@@ -225,7 +225,7 @@ echo "Test Command:"
 echo "  curl -k -s $HTTPS_URL | grep kepler_node_cpu_usage_ratio"
 echo ""
 echo "Save this information:"
-cat > $SCRIPT_DIR/../K3S-INSTANCE-INFO.txt << EOF
+cat > $SCRIPT_DIR/../k3s-instance-info.txt << EOF
 Kepler K3s Deployment Information
 ==================================
 
@@ -264,7 +264,7 @@ Management Scripts:
 Deployed: $(date)
 EOF
 
-echo -e "${GREEN}✅ Deployment information saved to: K3S-INSTANCE-INFO.txt${NC}"
+echo -e "${GREEN}✅ Deployment information saved to: k3s-instance-info.txt${NC}"
 echo ""
 echo -e "${YELLOW}⏰ Wait ~15 minutes for Kepler installation to complete, then test the metrics endpoint.${NC}"
 echo ""

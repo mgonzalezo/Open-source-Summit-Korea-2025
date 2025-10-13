@@ -246,3 +246,8 @@ Thumbs.db
 # CloudFormation outputs
 cloudformation-outputs.json
 stack-outputs.json
+
+# AWS deployment sensitive info
+aws-deployment/*-instance-info.txt
+aws-deployment/k3s-instance-info.txt
+aws-deployment/instance-info.txt

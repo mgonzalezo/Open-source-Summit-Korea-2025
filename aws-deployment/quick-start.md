@@ -36,7 +36,7 @@ curl -k https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu
 ## Key Metrics Endpoints
 
 ```bash
-# After deployment completes (check K3S-INSTANCE-INFO.txt for IP):
+# After deployment completes (check k3s-instance-info.txt for IP):
 
 # Node CPU usage (real data)
 curl -k -s https://<IP>:30443/metrics | grep kepler_node_cpu_usage_ratio
@@ -102,9 +102,9 @@ watch -n 2 "curl -k -s https://localhost:30443/metrics | grep kepler_node_cpu_wa
 
 ## Documentation
 
-- **Technical Details**: See `KEPLER-DEPLOYMENT-SUMMARY.md`
-- **Automated Setup**: See `AUTOMATED-DEPLOYMENT.md`
-- **General Info**: See `README.md`
+- **Technical Details**: See `kepler-deployment-summary.md`
+- **Automated Setup**: See `automated-deployment.md`
+- **General Info**: See `readme.md`
 
 ## What Was Automated
 
