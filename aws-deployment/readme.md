@@ -60,19 +60,6 @@ cd aws-deployment/scripts
 curl -k https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu
 ```
 
-### 3. For Your Demo
-
-```bash
-# SSH to instance
-ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
-
-# Deploy sample workload
-kubectl run stress --image=polinux/stress -- stress --cpu 8 --timeout 60s
-
-# Watch power consumption
-watch -n 2 "curl -k -s https://localhost:30443/metrics | grep kepler_node_cpu_watts"
-```
-
 ## 📁 Deployment Options
 
 ### Option 1: Fully Automated (Recommended)
@@ -267,8 +254,7 @@ Check quota:
 aws service-quotas get-service-quota \
   --service-code ec2 \
   --quota-code L-1216C47A \
-  --region us-east-1 \
-  --profile mgonzalezo
+  --region us-east-1
 ```
 
 Request increase if needed:
@@ -277,8 +263,7 @@ aws service-quotas request-service-quota-increase \
   --service-code ec2 \
   --quota-code L-1216C47A \
   --desired-value 96 \
-  --region us-east-1 \
-  --profile mgonzalezo
+  --region us-east-1
 ```
 
 ### 2. AWS CLI Configuration
@@ -289,8 +274,8 @@ curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip
 unzip awscliv2.zip
 sudo ./aws/install
 
-# Configure profile
-aws configure --profile mgonzalezo
+# Configure credentials
+aws configure
 ```
 
 ### 3. SSH Key Pair
@@ -300,67 +285,11 @@ aws configure --profile mgonzalezo
 aws ec2 create-key-pair \
   --key-name oss-korea \
   --region us-east-1 \
-  --profile mgonzalezo \
   --query 'KeyMaterial' \
   --output text > oss-korea.pem
 
 # Set permissions
 chmod 400 oss-korea.pem
-```
-
-## 🔧 What Gets Installed
-
-### On EC2 Instance
-- **K3s** - Lightweight Kubernetes (not Docker/Kind)
-- **kubectl** - Kubernetes CLI
-- **Helm 3** - Package manager
-- **kustomize** - Configuration management
-- **msr-tools** - MSR register reading utilities
-
-### Kubernetes Components
-- **Kepler v0.11.2** - Energy monitoring (DaemonSet)
-- **Model Server** - ML-based power estimation (Deployment)
-- **cert-manager v1.18.2** - Certificate management
-- **Nginx** - HTTPS proxy for metrics
-
-### Automated Scripts
-- `setup-kepler-automated.sh` - Full Kepler deployment
-- Bash aliases (k, kgp, kgn)
-- Deployment info files
-
-## 🎯 Use Cases
-
-### For Presentations (Recommended Flow)
-
-```bash
-# 1-2 days before: Deploy
-./deploy-automated-stack.sh
-
-# Immediately after: Stop
-./stop-stack.sh
-
-# 1 hour before presentation: Start
-./start-stack.sh
-
-# During demo: Show metrics
-curl -k https://<IP>:30443/metrics | grep kepler
-
-# After presentation: Delete
-./delete-stack.sh
-```
-
-### For Development
-
-```bash
-# Deploy once
-./deploy-automated-stack.sh
-
-# Work sessions: Stop/Start
-./stop-stack.sh  # End of day
-./start-stack.sh # Next morning
-
-# When done: Delete
-./delete-stack.sh
 ```
 
 ## 🔐 Security Notes
@@ -372,15 +301,6 @@ curl -k https://<IP>:30443/metrics | grep kepler
 - **IAM role:** Minimal required permissions
 
 **For production:** Restrict access in CloudFormation template.
-
-## ⚠️ Important Notes
-
-1. **Always stop or delete** when done to avoid charges
-2. **Monitor costs** with `./check-stack.sh`
-3. **Budget ~$4/hour** for running time
-4. **Set AWS billing alarms** in Console
-5. **AWS bare-metal has RAPL limitations** - that's why we use Model Server
-6. **All workload metrics are real** - only power is estimated
 
 ## 🆘 Troubleshooting
 

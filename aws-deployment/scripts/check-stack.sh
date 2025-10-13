@@ -3,7 +3,7 @@
 # Configuration
 STACK_NAME="kepler-baremetal-stack"
 REGION="us-east-1"
-PROFILE="mgonzalezo"
+PROFILE="${AWS_PROFILE:-default}"
 
 # Colors
 GREEN='\033[0;32m'

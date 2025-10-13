@@ -187,7 +187,7 @@ Displays:
 ```bash
 # Check stack events
 aws cloudformation describe-stack-events \
-  --profile mgonzalezo \
+   \
   --region us-east-1 \
   --stack-name kepler-baremetal-stack \
   --max-items 20
@@ -198,7 +198,7 @@ aws cloudformation describe-stack-events \
 1. **Check security group:**
    ```bash
    aws ec2 describe-security-groups \
-     --profile mgonzalezo \
+      \
      --region us-east-1 \
      --group-names kepler-kind-security-group
    ```

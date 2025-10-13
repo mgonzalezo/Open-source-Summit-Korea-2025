@@ -1,38 +1,38 @@
 # Kepler Deployment Summary - AWS c5.metal
 
 ## Instance Information
-- **Instance ID**: i-0696d63a54879a1c6
+- **Instance ID**: <INSTANCE_ID>
 - **Instance Type**: c5.metal (96 vCPUs, 192 GB RAM)
-- **Public IP**: 98.89.175.99
+- **Public IP**: <PUBLIC_IP>
 - **Region**: us-east-1
 - **Cluster**: K3s (Lightweight Kubernetes)
 - **CloudFormation Stack**: kepler-k3s-stack
 
 ## SSH Access
 ```bash
-ssh -i oss-korea.pem ubuntu@98.89.175.99
+ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
 ```
 
 ## Kepler Access
 
 ### HTTPS Metrics Endpoint (Recommended)
-- **URL**: https://98.89.175.99:30443/metrics
+- **URL**: https://<PUBLIC_IP>:30443/metrics
 - **Protocol**: HTTPS (TLS 1.2/1.3)
 - **Certificate**: Self-signed (use -k with curl)
 - **Port**: 30443 (NodePort)
 
 ```bash
 # Access metrics via HTTPS
-curl -k https://98.89.175.99:30443/metrics
+curl -k https://<PUBLIC_IP>:30443/metrics
 
 # Get CPU usage
-curl -k -s https://98.89.175.99:30443/metrics | grep kepler_node_cpu_usage_ratio
+curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu_usage_ratio
 
 # Get power consumption
-curl -k -s https://98.89.175.99:30443/metrics | grep kepler_node_cpu_watts
+curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu_watts
 
 # Get per-pod power metrics
-curl -k -s https://98.89.175.99:30443/metrics | grep kepler_pod_cpu_watts
+curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_pod_cpu_watts
 ```
 
 ## Architecture & Technical Challenges
@@ -272,19 +272,19 @@ kubectl exec -n kepler-system $(kubectl get pod -n kepler-system -l app.kubernet
 ### Verify Real CPU Metrics Collection
 ```bash
 # Check node CPU usage (real data)
-curl -k -s https://98.89.175.99:30443/metrics | grep kepler_node_cpu_usage_ratio
+curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu_usage_ratio
 
 # Check process-level CPU time (real data)
-curl -k -s https://98.89.175.99:30443/metrics | grep kepler_process_cpu_seconds_total | head -5
+curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_process_cpu_seconds_total | head -5
 
 # Check power estimation (model server)
-curl -k -s https://98.89.175.99:30443/metrics | grep kepler_node_cpu_watts
+curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu_watts
 ```
 
 ### Verify Model Server Connection
 ```bash
 # SSH to instance
-ssh -i oss-korea.pem ubuntu@98.89.175.99
+ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
 
 # Check model server logs show requests from Kepler
 sudo kubectl logs -n kepler-model-server -l app.kubernetes.io/name=kepler-model-server --tail=20
@@ -345,7 +345,7 @@ kubectl get configmap kepler -n kepler-system -o yaml | grep -A 3 "fake-cpu-mete
 **Symptom**:
 ```bash
 # No power estimates in metrics
-curl -k -s https://98.89.175.99:30443/metrics | grep kepler_node_cpu_watts
+curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu_watts
 # Returns 0 or no results
 ```
 
@@ -367,7 +367,7 @@ kubectl logs -n kepler-model-server -l app.kubernetes.io/name=kepler-model-serve
 
 **Symptom**:
 ```bash
-curl -k https://98.89.175.99:30443/metrics
+curl -k https://<PUBLIC_IP>:30443/metrics
 # Connection refused or timeout
 ```
 
@@ -446,7 +446,7 @@ Despite limitations, c5.metal provides:
 kubectl run stress --image=polinux/stress -- stress --cpu 4 --timeout 60s
 
 # Watch power metrics change
-watch -n 5 "curl -k -s https://98.89.175.99:30443/metrics | grep kepler_node_cpu_watts"
+watch -n 5 "curl -k -s https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu_watts"
 ```
 
 ## References & Links

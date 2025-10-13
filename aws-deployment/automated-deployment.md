@@ -178,7 +178,7 @@ AUTO_INSTALL="true"         # false to manually run setup
 aws cloudformation describe-stacks \
   --stack-name kepler-k3s-stack \
   --region us-east-1 \
-  --profile mgonzalezo \
+   \
   --query "Stacks[0].StackStatus"
 ```
 

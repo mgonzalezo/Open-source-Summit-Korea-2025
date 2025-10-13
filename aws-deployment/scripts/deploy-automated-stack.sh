@@ -9,7 +9,7 @@ set -e
 # Configuration
 STACK_NAME="kepler-k3s-stack"
 REGION="us-east-1"
-PROFILE="mgonzalezo"
+PROFILE="${AWS_PROFILE:-default}"
 KEY_NAME="oss-korea"
 INSTANCE_TYPE="c5.metal"
 VOLUME_SIZE="100"
