@@ -4,7 +4,7 @@ Energy monitoring for Kubernetes workloads using eBPF technology.
 
 **Open Source Summit Korea 2025**
 
-## 📋 What is Kepler?
+##  What is Kepler?
 
 Kepler (Kubernetes Efficient Power Level Exporter) is a CNCF Sandbox project that uses eBPF to probe energy-related system stats and exports Prometheus metrics to help you monitor the energy consumption of Kubernetes workloads in real-time.
 
@@ -44,7 +44,7 @@ Kepler (Kubernetes Efficient Power Level Exporter) is a CNCF Sandbox project tha
 └──────────────────────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 
@@ -147,7 +147,7 @@ kubectl port-forward -n kepler-system service/kepler 28282:28282 &
 curl http://localhost:28282/metrics | grep kepler
 ```
 
-## 📊 Available Metrics
+##  Available Metrics
 
 Kepler exposes energy consumption metrics via Prometheus:
 
@@ -177,7 +177,7 @@ curl http://localhost:28282/metrics | grep 'kepler_container.*joules_total' | gr
 curl http://localhost:28282/metrics | grep 'kepler_node.*joules_total'
 ```
 
-## 🔧 Configuration
+##  Configuration
 
 ### For Testing/Demo Environments (Kind, minikube)
 
@@ -196,11 +196,11 @@ Use **kepler-production.yaml** configuration:
 - Hardware power monitoring (RAPL) enabled
 - Health checks and disruption budgets
 
-## ☁️ AWS Bare-Metal Deployment
+## ️ AWS Bare-Metal Deployment
 
 For **real hardware power monitoring (RAPL)** on AWS bare-metal instances:
 
-**📖 See [aws-deployment/](aws-deployment/) folder**
+** See [aws-deployment/](aws-deployment/) folder**
 
 Features:
 - Automated CloudFormation deployment
@@ -215,7 +215,7 @@ cd aws-deployment/scripts
 ./deploy-stack.sh
 ```
 
-## 📁 Repository Structure
+##  Repository Structure
 
 ```
 .
@@ -231,7 +231,7 @@ cd aws-deployment/scripts
     └── templates/             # CloudFormation templates
 ```
 
-## 🛠 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -274,7 +274,7 @@ kubectl get events -n kepler-operator --sort-by=.metadata.creationTimestamp
 kubectl exec -n kepler-operator -l app.kubernetes.io/name=kepler-operator -- ls -la /sys/class/powercap/
 ```
 
-## 📊 Visualization with Grafana
+##  Visualization with Grafana
 
 ### Import Kepler Dashboard
 
@@ -297,7 +297,7 @@ kubectl exec -n kepler-operator -l app.kubernetes.io/name=kepler-operator -- ls 
    - Dashboard ID: **15174** (Kepler Energy Dashboard)
    - Or import from: https://grafana.com/grafana/dashboards/15174
 
-## 🎯 Use Cases
+##  Use Cases
 
 ### 1. Cost Optimization
 Monitor energy consumption to identify power-hungry workloads and optimize resource allocation.
@@ -311,7 +311,7 @@ Understand power requirements for scaling decisions and infrastructure planning.
 ### 4. Anomaly Detection
 Detect unusual power consumption patterns that may indicate issues or inefficiencies.
 
-## 📚 Additional Resources
+##  Additional Resources
 
 ### Kepler Documentation
 - [Official Website](https://sustainable-computing.io/)
@@ -329,7 +329,7 @@ Detect unusual power consumption patterns that may indicate issues or inefficien
 - [Kepler: A Framework for Kubernetes Energy Metrics](https://arxiv.org/abs/2303.03187)
 - [Sustainable Computing](https://www.sustainable-computing.io/research/)
 
-## 🤝 Contributing
+##  Contributing
 
 This repository is part of the **Open Source Summit Korea 2025** presentation.
 
@@ -337,11 +337,11 @@ For contributions to Kepler itself, please visit:
 - [Kepler GitHub Repository](https://github.com/sustainable-computing-io/kepler)
 - [Kepler Community Guide](https://sustainable-computing.io/community/)
 
-## 📄 License
+##  License
 
 This project follows the same license as Kepler - **Apache License 2.0**
 
-## 🎤 Presentation Information
+##  Presentation Information
 
 **Event:** Open Source Summit Korea 2025
 **Topic:** Kepler - Energy Monitoring for Kubernetes

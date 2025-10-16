@@ -104,7 +104,7 @@ The working solution required:
 - **Version**: v0.11.2
 - **Deployment**: Helm chart (direct, not via operator)
 - **Pod**: kepler-bpmqq (DaemonSet)
-- **Status**: Running ✅
+- **Status**: Running 
 - **Configuration**:
   - Fake CPU meter: Enabled (for initialization only)
   - Model server: Enabled and connected
@@ -116,7 +116,7 @@ The working solution required:
 - **Version**: latest
 - **Image**: quay.io/sustainable_computing_io/kepler_model_server:latest
 - **Pod**: kepler-model-server-56579bd46d-84lmt
-- **Status**: Running ✅
+- **Status**: Running 
 - **Purpose**: ML-based power estimation using real CPU metrics
 - **Models Loaded**:
   - `ec2-0.7.11` - Trained on AWS EC2 instances
@@ -126,7 +126,7 @@ The working solution required:
 ### 3. HTTPS Proxy (Nginx)
 - **Namespace**: kepler-system
 - **Pod**: kepler-https-proxy-7bd9b6d587-dtl5n
-- **Status**: Running ✅
+- **Status**: Running 
 - **Purpose**: TLS termination for secure metrics access
 - **Certificate**: Self-signed via cert-manager
 - **Port**: 8443 (NodePort 30443)
@@ -405,17 +405,17 @@ kubectl delete pod -n kepler-system -l app=kepler-https-proxy
 - **Workaround**: Use model-based estimation
 
 ### 2. Kernel Modules
-- **Available**: MSR module (`/dev/cpu/*/msr`) ✅
+- **Available**: MSR module (`/dev/cpu/*/msr`) 
 - **Missing**: `intel_rapl_msr`, `intel_rapl_common`
 - **Impact**: Cannot bridge MSR RAPL data to Linux powercap framework
 
 ### 3. Hardware vs Software Access
 | Component | Hardware Support | Software Access | Status |
 |-----------|------------------|-----------------|--------|
-| RAPL MSR Registers | ✅ Available | ✅ Readable via rdmsr | ✅ Working |
-| Linux powercap Interface | ✅ Hardware capable | ❌ Not exposed | ❌ Blocked |
-| eBPF Probes | ✅ Supported | ✅ Fully functional | ✅ Working |
-| Performance Counters | ✅ Available | ✅ Accessible | ✅ Working |
+| RAPL MSR Registers |  Available |  Readable via rdmsr |  Working |
+| Linux powercap Interface |  Hardware capable |  Not exposed |  Blocked |
+| eBPF Probes |  Supported |  Fully functional |  Working |
+| Performance Counters |  Available |  Accessible |  Working |
 
 ### 4. Why c5.metal Still Makes Sense
 Despite limitations, c5.metal provides:
@@ -428,10 +428,10 @@ Despite limitations, c5.metal provides:
 ## Next Steps for Presentation
 
 ### Before the Demo
-1. ✅ Let Kepler collect baseline data (15-30 minutes)
-2. 📋 Prepare sample workloads to show power consumption changes
-3. 📊 Set up Grafana dashboard (optional but impressive)
-4. 📝 Practice explaining model server vs real RAPL
+1.  Let Kepler collect baseline data (15-30 minutes)
+2.  Prepare sample workloads to show power consumption changes
+3.  Set up Grafana dashboard (optional but impressive)
+4.  Practice explaining model server vs real RAPL
 
 ### During the Demo
 1. Show HTTPS metrics endpoint

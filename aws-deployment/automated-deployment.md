@@ -6,13 +6,13 @@ This guide describes the **fully automated** CloudFormation deployment that incl
 
 This automated deployment sets up everything with **zero manual troubleshooting**:
 
-✅ K3s cluster installation
-✅ Kepler v0.11.2 with model server configuration
-✅ Kepler Model Server (ML-based power estimation)
-✅ HTTPS/HTTP metrics endpoints
-✅ Self-signed TLS certificates via cert-manager
-✅ All necessary security group rules
-✅ Automated workarounds for AWS RAPL limitations
+ K3s cluster installation
+ Kepler v0.11.2 with model server configuration
+ Kepler Model Server (ML-based power estimation)
+ HTTPS/HTTP metrics endpoints
+ Self-signed TLS certificates via cert-manager
+ All necessary security group rules
+ Automated workarounds for AWS RAPL limitations
 
 ## Quick Start
 
@@ -356,4 +356,4 @@ aws-deployment/
 
 ---
 
-**🎉 No more troubleshooting needed!** All the fixes and workarounds are built into this automated deployment.
+** No more troubleshooting needed!** All the fixes and workarounds are built into this automated deployment.

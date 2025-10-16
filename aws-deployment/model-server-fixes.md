@@ -195,10 +195,10 @@ kubectl logs -n kepler-model-server -l app=kepler-model-server
 
 The updated CloudFormation template now includes:
 
-1. ✅ Explicit container command for Model Server
-2. ✅ Simple, consistent labels across all resources
-3. ✅ Explicit port numbers instead of named port references
-4. ✅ Correct label selectors in wait commands
+1.  Explicit container command for Model Server
+2.  Simple, consistent labels across all resources
+3.  Explicit port numbers instead of named port references
+4.  Correct label selectors in wait commands
 
 **Result**: Future deployments using `./deploy-automated-stack.sh` will work without manual intervention.
 

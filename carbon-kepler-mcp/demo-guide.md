@@ -55,7 +55,7 @@ curl -k https://<IP>:30443/metrics | grep kepler_pod_cpu_watts
 
 **Expected Response:**
 ```
-✅ COMPLIANT: efficient-app meets both Korean Carbon Neutrality 2050
+ COMPLIANT: efficient-app meets both Korean Carbon Neutrality 2050
 (398 gCO2eq/kWh ≤ 424 gCO2eq/kWh) and Green Data Center PUE requirements
 (1.3 ≤ 1.4).
 
@@ -82,7 +82,7 @@ Recommendations:
 
 **Expected Response:**
 ```
-⚠️ NON-COMPLIANT: heavy-app exceeds both Korean standards:
+️ NON-COMPLIANT: heavy-app exceeds both Korean standards:
 • Carbon: 510 gCO2eq/kWh (20% over 424 target)
 • PUE: 1.6 (14% over 1.4 target)
 
@@ -120,7 +120,7 @@ Current:
 After optimizations (temporal_shift + resource_rightsizing):
 • Power: 55.3W (15% reduction)
 • Emissions: 20.5 kg/month
-• Status: COMPLIANT ✓
+• Status: COMPLIANT 
 
 Estimated savings:
 • Power reduction: 9.7W
@@ -152,8 +152,8 @@ Current (ap-northeast-2, Seoul):
 
 Alternatives:
 • us-east-1 (Virginia): 540 gCO2eq/kWh - NON-COMPLIANT (6% worse)
-• us-west-2 (Oregon): 240 gCO2eq/kWh - COMPLIANT ✓ (53% better)
-• eu-north-1 (Stockholm): 60 gCO2eq/kWh - COMPLIANT ✓ (88% better)
+• us-west-2 (Oregon): 240 gCO2eq/kWh - COMPLIANT  (53% better)
+• eu-north-1 (Stockholm): 60 gCO2eq/kWh - COMPLIANT  (88% better)
 
 Best region: Stockholm, Sweden (88% reduction)
 
@@ -286,12 +286,12 @@ If live demo fails:
 
 ## Success Metrics
 
-- ✅ Demonstrate real Kepler metrics collection
-- ✅ Show Korean regulatory compliance assessment
-- ✅ Provide clear COMPLIANT/NON-COMPLIANT status
-- ✅ Generate actionable recommendations
-- ✅ Demonstrate regional carbon comparison
-- ✅ Show natural language interface with Claude
+-  Demonstrate real Kepler metrics collection
+-  Show Korean regulatory compliance assessment
+-  Provide clear COMPLIANT/NON-COMPLIANT status
+-  Generate actionable recommendations
+-  Demonstrate regional carbon comparison
+-  Show natural language interface with Claude
 
 ---
 

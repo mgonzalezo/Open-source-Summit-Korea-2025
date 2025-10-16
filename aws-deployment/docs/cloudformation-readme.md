@@ -2,7 +2,7 @@
 
 This CloudFormation stack automates the deployment of a bare-metal EC2 instance with Kind and Kepler pre-configured for the Open Source Summit Korea 2025 presentation.
 
-## 📋 Overview
+##  Overview
 
 The stack creates:
 - **Bare-metal EC2 instance** (c5.metal, m5.metal, etc.) with RAPL support
@@ -11,7 +11,7 @@ The stack creates:
 - **IAM Role** with CloudWatch and SSM permissions
 - **Automated setup** scripts for Docker, Kind, kubectl, and Helm
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Deploy the Stack
 
@@ -66,7 +66,7 @@ kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282 &
 curl http://localhost:28282/metrics | grep kepler
 ```
 
-## 🛠 Management Scripts
+##  Management Scripts
 
 ### Check Stack Status
 ```bash
@@ -103,10 +103,10 @@ Displays:
 - Requires typing "delete" to confirm
 - Cannot be undone!
 
-## 💰 Cost Management
+##  Cost Management
 
 ### Hourly Rates (us-east-1)
-- **c5.metal**: ~$4.08/hour (96 vCPU, 192 GB RAM) ✅ Recommended
+- **c5.metal**: ~$4.08/hour (96 vCPU, 192 GB RAM)  Recommended
 - **m5.metal**: ~$4.61/hour (96 vCPU, 384 GB RAM)
 - **m5d.metal**: ~$5.42/hour (96 vCPU, 384 GB RAM, NVMe SSD)
 - **r5.metal**: ~$6.05/hour (96 vCPU, 768 GB RAM)
@@ -154,7 +154,7 @@ Displays:
    ./delete-stack.sh
    ```
 
-## 📁 Files Created by CloudFormation
+##  Files Created by CloudFormation
 
 ### On EC2 Instance
 
@@ -180,7 +180,7 @@ Displays:
 └── CLOUDFORMATION-README.md      # This file
 ```
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Stack Creation Failed
 
@@ -243,21 +243,21 @@ aws cloudformation describe-stack-events \
    ls -la /sys/class/powercap/
    ```
 
-## 🎯 Production vs Testing
+##  Production vs Testing
 
 ### This Setup (Bare-Metal)
-✅ Real hardware power monitoring (RAPL)
-✅ Accurate energy metrics
-✅ Production-like environment
-✅ Suitable for demos and presentations
+ Real hardware power monitoring (RAPL)
+ Accurate energy metrics
+ Production-like environment
+ Suitable for demos and presentations
 
 ### Alternative (VM/Cloud)
-⚠️ No direct hardware access
-⚠️ Estimated metrics only
-⚠️ Fake CPU meter required
-✅ Much cheaper
+️ No direct hardware access
+️ Estimated metrics only
+️ Fake CPU meter required
+ Much cheaper
 
-## 📚 Additional Resources
+##  Additional Resources
 
 ### Kepler Documentation
 - [Official Documentation](https://sustainable-computing.io/)
@@ -272,14 +272,14 @@ aws cloudformation describe-stack-events \
 - [Kind Documentation](https://kind.sigs.k8s.io/)
 - [Quick Start](https://kind.sigs.k8s.io/docs/user/quick-start/)
 
-## 🤝 Support
+##  Support
 
 For issues related to:
 - **This CloudFormation setup**: Open an issue in this repository
 - **Kepler**: Visit the [Kepler GitHub](https://github.com/sustainable-computing-io/kepler)
 - **AWS**: Check [AWS Support](https://console.aws.amazon.com/support)
 
-## ⚠️ Important Reminders
+## ️ Important Reminders
 
 1. **Always stop or delete when done** to avoid unexpected charges
 2. **Use `./check-stack.sh`** regularly to monitor costs
@@ -287,7 +287,7 @@ For issues related to:
 4. **Set billing alarms** in AWS Console
 5. **Your SSH key is stored** in `~/.ssh/` - keep it safe!
 
-## 📝 Example Workflow
+##  Example Workflow
 
 ```bash
 # Day 1: Deploy

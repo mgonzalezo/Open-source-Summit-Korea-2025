@@ -17,11 +17,11 @@ curl -k https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu
 
 ## What You Get
 
-✅ **Kepler v0.11.2** - Collecting real CPU/memory/process metrics via eBPF
-✅ **Model Server** - ML-based power estimation (AWS EC2 models)
-✅ **HTTPS Endpoint** - Secure metrics access on port 30443
-✅ **HTTP Endpoint** - Plain metrics access on port 30080
-✅ **Zero Manual Config** - All AWS RAPL workarounds included
+ **Kepler v0.11.2** - Collecting real CPU/memory/process metrics via eBPF
+ **Model Server** - ML-based power estimation (AWS EC2 models)
+ **HTTPS Endpoint** - Secure metrics access on port 30443
+ **HTTP Endpoint** - Plain metrics access on port 30080
+ **Zero Manual Config** - All AWS RAPL workarounds included
 
 ## Files You Need
 
@@ -110,13 +110,13 @@ watch -n 2 "curl -k -s https://localhost:30443/metrics | grep kepler_node_cpu_wa
 
 All the troubleshooting we did is now automated:
 
-1. ✅ RAPL workaround (fake CPU meter + model server)
-2. ✅ Model server deployment
-3. ✅ HTTPS configuration with TLS
-4. ✅ Security group rules
-5. ✅ Helm values configuration
-6. ✅ cert-manager installation
-7. ✅ Kepler v0.11.2 deployment
+1.  RAPL workaround (fake CPU meter + model server)
+2.  Model server deployment
+3.  HTTPS configuration with TLS
+4.  Security group rules
+5.  Helm values configuration
+6.  cert-manager installation
+7.  Kepler v0.11.2 deployment
 
 **Result**: Zero manual troubleshooting needed!
 

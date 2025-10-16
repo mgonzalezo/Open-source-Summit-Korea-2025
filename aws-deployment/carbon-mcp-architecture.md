@@ -151,7 +151,7 @@ kepler_container_joules_total
   "pue": 1.6,
   "pue_status": "NON_COMPLIANT",
   "carbon_emissions_gCO2eq_hour": 19.2,
-  "recommendation": "⚠️ NON-COMPLIANT: Workload exceeds Korea Carbon Neutrality 2050 target by 20%. PUE of 1.6 exceeds Green Data Center requirement of 1.4. Recommendations: 1) Reduce CPU-intensive operations during peak grid hours (10am-6pm KST). 2) Implement workload scheduling to shift to cleaner grid hours (2am-6am, ~380 gCO2/kWh). 3) Optimize container resource requests to reduce CPU waste.",
+  "recommendation": "️ NON-COMPLIANT: Workload exceeds Korea Carbon Neutrality 2050 target by 20%. PUE of 1.6 exceeds Green Data Center requirement of 1.4. Recommendations: 1) Reduce CPU-intensive operations during peak grid hours (10am-6pm KST). 2) Implement workload scheduling to shift to cleaner grid hours (2am-6am, ~380 gCO2/kWh). 3) Optimize container resource requests to reduce CPU waste.",
   "optimizations": [
     {
       "type": "temporal_shift",
@@ -327,7 +327,7 @@ kepler_container_joules_total
 │     "current_power_watts": 45.2,                                │
 │     "grid_carbon_intensity_gCO2eq_kWh": 424,                    │
 │     "estimated_workload_intensity_gCO2eq_kWh": 510,             │
-│     "recommendation": "⚠️ NON-COMPLIANT: Workload exceeds...",  │
+│     "recommendation": "️ NON-COMPLIANT: Workload exceeds...",  │
 │     "optimizations": [...]                                      │
 │   }                                                              │
 │ }                                                                │
@@ -1036,7 +1036,7 @@ User: "Compare carbon impact across AWS regions"
 Claude: "Regional comparison for ml-training-job:
 - ap-northeast-2 (Seoul): 510 gCO2eq/kWh - NON_COMPLIANT
 - us-east-1 (Virginia): 540 gCO2eq/kWh - NON_COMPLIANT
-- eu-north-1 (Stockholm): 60 gCO2eq/kWh - COMPLIANT ✓
+- eu-north-1 (Stockholm): 60 gCO2eq/kWh - COMPLIANT 
 
 Best region: eu-north-1 (88% reduction)
 Migration recommendation: Consider for batch workloads"

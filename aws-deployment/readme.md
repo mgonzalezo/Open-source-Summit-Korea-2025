@@ -2,7 +2,7 @@
 
 Deploy Kepler on AWS bare-metal EC2 instances with automated CloudFormation templates. This setup provides energy monitoring using ML-based power estimation for cloud environments where RAPL is not exposed.
 
-## 📋 Table of Contents
+##  Table of Contents
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
@@ -13,7 +13,7 @@ Deploy Kepler on AWS bare-metal EC2 instances with automated CloudFormation temp
 - [Architecture](#architecture)
 - [Documentation](#documentation)
 
-## 🎯 Overview
+##  Overview
 
 This deployment creates a fully automated Kepler environment that works around AWS bare-metal limitations:
 
@@ -30,13 +30,13 @@ This deployment creates a fully automated Kepler environment that works around A
 
 ### Key Features
 
-✅ **Automated deployment** - Zero manual configuration
-✅ **Real metrics collection** - eBPF-based CPU, memory, process tracking
-✅ **ML power estimation** - When hardware RAPL unavailable
-✅ **HTTPS access** - TLS-secured metrics endpoint
-✅ **Cost efficient** - Stop/start capability
+ **Automated deployment** - Zero manual configuration
+ **Real metrics collection** - eBPF-based CPU, memory, process tracking
+ **ML power estimation** - When hardware RAPL unavailable
+ **HTTPS access** - TLS-secured metrics endpoint
+ **Cost efficient** - Stop/start capability
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Deploy Everything (Automated)
 
@@ -60,7 +60,7 @@ cd aws-deployment/scripts
 curl -k https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu
 ```
 
-## 📁 Deployment Options
+##  Deployment Options
 
 ### Option 1: Fully Automated (Recommended)
 
@@ -90,7 +90,7 @@ ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
 
 **Best for:** Development, customization
 
-## 🛠 Managing Your Stack
+##  Managing Your Stack
 
 ### Check Status
 ```bash
@@ -115,7 +115,7 @@ ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
 # Complete cleanup, frees all resources
 ```
 
-## 💰 Cost Management
+##  Cost Management
 
 ### Pricing (us-east-1)
 
@@ -140,7 +140,7 @@ ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
 ./check-stack.sh
 ```
 
-## 🏗 Architecture
+##  Architecture
 
 ### Deployment Architecture
 
@@ -217,7 +217,7 @@ Fake Meter  Model Server → ML Estimation
 
 **Decision:** K3s is better for AWS bare-metal deployments.
 
-## 📚 Documentation
+##  Documentation
 
 ### Quick Reference
 - **[quick-start.md](quick-start.md)** - One-page cheat sheet
@@ -241,7 +241,7 @@ Fake Meter  Model Server → ML Estimation
   - Access commands
   - Metrics endpoints
 
-## 🚀 Prerequisites
+##  Prerequisites
 
 ### 1. AWS Account Requirements
 
@@ -292,7 +292,7 @@ aws ec2 create-key-pair \
 chmod 400 oss-korea.pem
 ```
 
-## 🔐 Security Notes
+##  Security Notes
 
 - **SSH access:** Currently 0.0.0.0/0 (change for production!)
 - **Metrics endpoints:** Publicly accessible (demo only)
@@ -334,7 +334,7 @@ kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler
 ./deploy-automated-stack.sh
 ```
 
-## 📂 Folder Structure
+##  Folder Structure
 
 ```
 aws-deployment/
@@ -343,19 +343,19 @@ aws-deployment/
 ├── automated-deployment.md            # Automation details
 ├── kepler-deployment-summary.md       # Technical guide
 ├── scripts/
-│   ├── deploy-automated-stack.sh     # 🌟 Automated deployment
+│   ├── deploy-automated-stack.sh     #  Automated deployment
 │   ├── deploy-stack.sh               # Manual deployment
 │   ├── check-stack.sh                # Status checker
 │   ├── start-stack.sh                # Start instance
 │   ├── stop-stack.sh                 # Stop instance
 │   └── delete-stack.sh               # Delete stack
 ├── templates/
-│   ├── kepler-k3s-automated-stack.yaml   # 🌟 Full automation
+│   ├── kepler-k3s-automated-stack.yaml   #  Full automation
 │   └── kepler-k3s-stack.yaml             # Manual setup
 └── k3s-instance-info.txt             # Generated (gitignored)
 ```
 
-## 🔗 Resources
+##  Resources
 
 ### Kepler
 - [Official Documentation](https://sustainable-computing.io/)

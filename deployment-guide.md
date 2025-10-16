@@ -322,10 +322,10 @@ kubectl exec -n kepler-system -l app.kubernetes.io/name=kepler -- cat /proc/self
 
 | Platform | Support Level | Notes |
 |----------|---------------|-------|
-| Bare-metal Intel/AMD | ✅ Full | Complete RAPL support |
-| Cloud VMs (AWS, GCP, Azure) | ⚠️ Limited | No direct hardware access |
-| ARM64 | ⚠️ Limited | Basic support, limited power monitoring |
-| Containerized (kind, minikube) | ✅ Testing only | Fake CPU meter for demo |
+| Bare-metal Intel/AMD |  Full | Complete RAPL support |
+| Cloud VMs (AWS, GCP, Azure) | ️ Limited | No direct hardware access |
+| ARM64 | ️ Limited | Basic support, limited power monitoring |
+| Containerized (kind, minikube) |  Testing only | Fake CPU meter for demo |
 
 ### Performance Impact
 
