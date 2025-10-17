@@ -20,7 +20,7 @@ This automated deployment sets up everything with **zero manual troubleshooting*
 
 ```bash
 cd aws-deployment/scripts
-./deploy-automated-stack.sh
+scripts/create-stack.sh
 ```
 
 **That's it!** The script will:
@@ -139,7 +139,7 @@ SecurityGroupIngress:
 You can customize the deployment:
 
 ```bash
-# Edit these in deploy-automated-stack.sh:
+# Edit these in create-stack.sh:
 INSTANCE_TYPE="c5.metal"    # or m5.metal, r5.metal
 VOLUME_SIZE="100"           # GB of storage
 AUTO_INSTALL="true"         # false to manually run setup
@@ -157,7 +157,7 @@ AUTO_INSTALL="true"         # false to manually run setup
   - Automated setup scripts
 
 ### Deployment Script
-- **File**: `scripts/deploy-automated-stack.sh`
+- **File**: `scripts/create-stack.sh`
 - **What it does**: One-command deployment
 - **Features**:
   - VPC detection
@@ -165,11 +165,9 @@ AUTO_INSTALL="true"         # false to manually run setup
   - Progress monitoring
   - Output saving
 
-### Existing Scripts (Still work)
-- `stop-stack.sh` - Stop instance
-- `start-stack.sh` - Start instance
+### Essential Scripts
+- `create-stack.sh` - Create and deploy CloudFormation stack
 - `delete-stack.sh` - Delete everything
-- `check-stack.sh` - Check status
 
 ## Monitoring Deployment Progress
 
@@ -266,15 +264,15 @@ tail -f /var/log/user-data.log
 ### Manually Run Setup (if AUTO_INSTALL=false)
 ```bash
 ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
-./setup-kepler-automated.sh
+scripts/setup-kepler-automated.sh
 ```
 
 ### Re-deploy From Scratch
 ```bash
 cd aws-deployment/scripts
-./delete-stack.sh
+scripts/delete-stack.sh
 # Wait for deletion
-./deploy-automated-stack.sh
+scripts/create-stack.sh
 ```
 
 ## What's Different from Original Template
@@ -295,36 +293,8 @@ cd aws-deployment/scripts
 Same as before:
 - **Hourly cost**: ~$4.08/hour for c5.metal
 - **Budget**: $344.70 = ~84 hours
-- **Stop when not in use**: `./stop-stack.sh`
-- **Delete when done**: `./delete-stack.sh`
-
-## For Your Presentation
-
-### Key Points to Mention
-
-1. **Challenge**: "AWS bare-metal doesn't expose RAPL via standard Linux interfaces"
-2. **Solution**: "We use Kepler's model server for ML-based power estimation"
-3. **Data Accuracy**: "All workload metrics are real - only power is estimated"
-4. **Automation**: "Fully automated deployment - zero manual configuration"
-
-### Demo Flow
-
-```bash
-# 1. Show deployment
-./deploy-automated-stack.sh
-
-# 2. While waiting, explain the architecture
-cat kepler-deployment-summary.md
-
-# 3. Once ready, show metrics
-curl -k https://<IP>:30443/metrics | grep kepler_node_cpu_usage_ratio
-
-# 4. Deploy sample workload
-kubectl run stress --image=polinux/stress -- stress --cpu 4 --timeout 60s
-
-# 5. Watch power change
-watch -n 2 "curl -k -s https://<IP>:30443/metrics | grep kepler_node_cpu_watts"
-```
+- **Stop when not in use**: `scripts/stop-stack.sh`
+- **Delete when done**: `scripts/delete-stack.sh`
 
 ## Files Summary
 
@@ -334,8 +304,8 @@ aws-deployment/
 │   ├── kepler-k3s-stack.yaml              # Original (manual setup)
 │   └── kepler-k3s-automated-stack.yaml    # NEW: Fully automated
 ├── scripts/
-│   ├── deploy-automated-stack.sh          # NEW: One-command deploy
-│   ├── deploy-stack.sh                    # Original
+│   ├── create-stack.sh          # NEW: One-command deploy
+│   ├── create-stack.sh                    # Original
 │   ├── stop-stack.sh                      # Works with both
 │   ├── start-stack.sh                     # Works with both
 │   ├── delete-stack.sh                    # Works with both
@@ -347,13 +317,11 @@ aws-deployment/
 
 ## Next Steps
 
-1. **Deploy**: `./deploy-automated-stack.sh`
+1. **Deploy**: `scripts/create-stack.sh`
 2. **Wait**: ~15 minutes for complete installation
 3. **Test**: Access metrics endpoint
-4. **Demo**: Deploy workload and watch power metrics
-5. **Stop**: `./stop-stack.sh` when done
-6. **Present**: Use kepler-deployment-summary.md for technical details
+4. **Stop**: `scripts/stop-stack.sh` when done
 
 ---
 
-** No more troubleshooting needed!** All the fixes and workarounds are built into this automated deployment.
+All fixes and workarounds are built into this automated deployment.

@@ -2,7 +2,7 @@
 
 Deploy Kepler on AWS bare-metal EC2 instances with automated CloudFormation templates. This setup provides energy monitoring using ML-based power estimation for cloud environments where RAPL is not exposed.
 
-##  Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
@@ -13,7 +13,7 @@ Deploy Kepler on AWS bare-metal EC2 instances with automated CloudFormation temp
 - [Architecture](#architecture)
 - [Documentation](#documentation)
 
-##  Overview
+## Overview
 
 This deployment creates a fully automated Kepler environment that works around AWS bare-metal limitations:
 
@@ -30,19 +30,19 @@ This deployment creates a fully automated Kepler environment that works around A
 
 ### Key Features
 
- **Automated deployment** - Zero manual configuration
- **Real metrics collection** - eBPF-based CPU, memory, process tracking
- **ML power estimation** - When hardware RAPL unavailable
- **HTTPS access** - TLS-secured metrics endpoint
- **Cost efficient** - Stop/start capability
+- **Automated deployment** - Zero manual configuration
+- **Real metrics collection** - eBPF-based CPU, memory, process tracking
+- **ML power estimation** - When hardware RAPL unavailable
+- **HTTPS access** - TLS-secured metrics endpoint
+- **Cost efficient** - Stop/start capability
 
-##  Quick Start
+## Quick Start
 
 ### 1. Deploy Everything (Automated)
 
 ```bash
 cd aws-deployment/scripts
-./deploy-automated-stack.sh
+scripts/create-stack.sh
 ```
 
 **What happens:**
@@ -60,12 +60,12 @@ cd aws-deployment/scripts
 curl -k https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu
 ```
 
-##  Deployment Options
+## Deployment Options
 
 ### Option 1: Fully Automated (Recommended)
 
 ```bash
-./deploy-automated-stack.sh
+scripts/create-stack.sh
 ```
 
 **Includes:**
@@ -75,47 +75,62 @@ curl -k https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu
 - HTTPS proxy
 - All configurations
 
-**Best for:** Presentations, demos, quick testing
+**Best for:** Quick testing and development
 
 ### Option 2: Manual Setup
 
 ```bash
 # Deploy infrastructure only
-./deploy-stack.sh
+scripts/create-stack.sh
 
 # SSH and manually run
 ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
-./setup-kepler-automated.sh
+scripts/setup-kepler-automated.sh
 ```
 
 **Best for:** Development, customization
 
-##  Managing Your Stack
+## Managing Your Stack
 
 ### Check Status
 ```bash
-./check-stack.sh
+aws cloudformation describe-stacks --stack-name kepler-k3s-stack --profile mgonzalezo
 ```
 
 ### Stop Instance (Save Costs)
 ```bash
-./stop-stack.sh
+# Get instance ID from stack
+INSTANCE_ID=$(aws cloudformation describe-stack-resources \
+  --stack-name kepler-k3s-stack \
+  --query 'StackResources[?ResourceType==`AWS::EC2::Instance`].PhysicalResourceId' \
+  --output text \
+  --profile mgonzalezo)
+
+# Stop instance
+aws ec2 stop-instances --instance-ids $INSTANCE_ID --profile mgonzalezo
 # Saves ~$4.08/hour, keeps all data
 ```
 
 ### Start Instance
 ```bash
-./start-stack.sh
+# Get instance ID and start
+INSTANCE_ID=$(aws cloudformation describe-stack-resources \
+  --stack-name kepler-k3s-stack \
+  --query 'StackResources[?ResourceType==`AWS::EC2::Instance`].PhysicalResourceId' \
+  --output text \
+  --profile mgonzalezo)
+
+aws ec2 start-instances --instance-ids $INSTANCE_ID --profile mgonzalezo
 # Resumes from where you left off
 ```
 
 ### Delete Everything
 ```bash
-./delete-stack.sh
+scripts/delete-stack.sh
 # Complete cleanup, frees all resources
 ```
 
-##  Cost Management
+## Cost Management
 
 ### Pricing (us-east-1)
 
@@ -134,13 +149,18 @@ ssh -i oss-korea.pem ubuntu@<PUBLIC_IP>
 
 ```bash
 # Always stop when not in use
-./stop-stack.sh
+INSTANCE_ID=$(aws cloudformation describe-stack-resources \
+  --stack-name kepler-k3s-stack \
+  --query 'StackResources[?ResourceType==`AWS::EC2::Instance`].PhysicalResourceId' \
+  --output text \
+  --profile mgonzalezo)
+aws ec2 stop-instances --instance-ids $INSTANCE_ID --profile mgonzalezo
 
-# Check costs
-./check-stack.sh
+# Check stack status
+aws cloudformation describe-stacks --stack-name kepler-k3s-stack --profile mgonzalezo
 ```
 
-##  Architecture
+## Architecture
 
 ### Deployment Architecture
 
@@ -217,7 +237,7 @@ Fake Meter  Model Server → ML Estimation
 
 **Decision:** K3s is better for AWS bare-metal deployments.
 
-##  Documentation
+## Documentation
 
 ### Quick Reference
 - **[quick-start.md](quick-start.md)** - One-page cheat sheet
@@ -226,7 +246,7 @@ Fake Meter  Model Server → ML Estimation
 - **[kepler-deployment-summary.md](kepler-deployment-summary.md)** - Complete technical guide
   - AWS limitations explained
   - RAPL vs Model Server
-  - Demo talking points
+  - Key points
   - Verification commands
 
 ### Automation Guide
@@ -241,7 +261,7 @@ Fake Meter  Model Server → ML Estimation
   - Access commands
   - Metrics endpoints
 
-##  Prerequisites
+## Prerequisites
 
 ### 1. AWS Account Requirements
 
@@ -272,7 +292,7 @@ aws service-quotas request-service-quota-increase \
 # Install AWS CLI
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
-sudo ./aws/install
+sudo scripts/aws/install
 
 # Configure credentials
 aws configure
@@ -292,7 +312,7 @@ aws ec2 create-key-pair \
 chmod 400 oss-korea.pem
 ```
 
-##  Security Notes
+## Security Notes
 
 - **SSH access:** Currently 0.0.0.0/0 (change for production!)
 - **Metrics endpoints:** Publicly accessible (demo only)
@@ -302,7 +322,7 @@ chmod 400 oss-korea.pem
 
 **For production:** Restrict access in CloudFormation template.
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### Stack won't create?
 ```bash
@@ -330,11 +350,11 @@ kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler
 
 ### Need to re-deploy?
 ```bash
-./delete-stack.sh
-./deploy-automated-stack.sh
+scripts/delete-stack.sh
+scripts/create-stack.sh
 ```
 
-##  Folder Structure
+## Folder Structure
 
 ```
 aws-deployment/
@@ -343,19 +363,14 @@ aws-deployment/
 ├── automated-deployment.md            # Automation details
 ├── kepler-deployment-summary.md       # Technical guide
 ├── scripts/
-│   ├── deploy-automated-stack.sh     #  Automated deployment
-│   ├── deploy-stack.sh               # Manual deployment
-│   ├── check-stack.sh                # Status checker
-│   ├── start-stack.sh                # Start instance
-│   ├── stop-stack.sh                 # Stop instance
+│   ├── create-stack.sh               # Create CloudFormation stack
 │   └── delete-stack.sh               # Delete stack
 ├── templates/
-│   ├── kepler-k3s-automated-stack.yaml   #  Full automation
-│   └── kepler-k3s-stack.yaml             # Manual setup
+│   └── kepler-k3s-stack.yaml         # CloudFormation template
 └── k3s-instance-info.txt             # Generated (gitignored)
 ```
 
-##  Resources
+## Resources
 
 ### Kepler
 - [Official Documentation](https://sustainable-computing.io/)

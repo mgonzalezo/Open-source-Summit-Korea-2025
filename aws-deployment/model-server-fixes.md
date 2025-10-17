@@ -200,7 +200,7 @@ The updated CloudFormation template now includes:
 3.  Explicit port numbers instead of named port references
 4.  Correct label selectors in wait commands
 
-**Result**: Future deployments using `./deploy-automated-stack.sh` will work without manual intervention.
+**Result**: Future deployments using `scripts/create-stack.sh` will work without manual intervention.
 
 ## ML Models Loaded
 
@@ -214,5 +214,5 @@ These models provide ML-based power consumption estimates based on real eBPF met
 ## Related Files
 
 - CloudFormation template: [kepler-k3s-automated-stack.yaml](templates/kepler-k3s-automated-stack.yaml)
-- Deployment script: [deploy-automated-stack.sh](scripts/deploy-automated-stack.sh)
+- Deployment script: [create-stack.sh](scripts/create-stack.sh)
 - Technical guide: [kepler-deployment-summary.md](kepler-deployment-summary.md)

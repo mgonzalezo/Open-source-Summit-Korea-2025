@@ -86,17 +86,17 @@ TOTAL                      1,230     Complete
 1. **Build Docker Image**
    ```bash
    cd carbon-kepler-mcp
-   ./scripts/build.sh
+   scripts/scripts/build.sh
    ```
 
 2. **Deploy to K3s**
    ```bash
-   ./scripts/deploy.sh
+   scripts/scripts/deploy.sh
    ```
 
 3. **Test MCP Tools**
    ```bash
-   PUBLIC_IP=<YOUR_IP> ./scripts/test-mcp.sh
+   PUBLIC_IP=<YOUR_IP> scripts/scripts/test-mcp.sh
    ```
 
 4. **Claude Desktop Integration**

@@ -4,7 +4,7 @@
 
 ```bash
 cd aws-deployment/scripts
-./deploy-automated-stack.sh
+scripts/create-stack.sh
 ```
 
 **Wait**: ~15-20 minutes for complete deployment
@@ -27,10 +27,8 @@ curl -k https://<PUBLIC_IP>:30443/metrics | grep kepler_node_cpu
 
 | File | Purpose |
 |------|---------|
-| `templates/kepler-k3s-automated-stack.yaml` | CloudFormation template with everything |
-| `scripts/deploy-automated-stack.sh` | One-command deployment |
-| `scripts/stop-stack.sh` | Stop instance (save $) |
-| `scripts/start-stack.sh` | Start instance |
+| `templates/kepler-k3s-stack.yaml` | CloudFormation template with everything |
+| `scripts/create-stack.sh` | One-command deployment |
 | `scripts/delete-stack.sh` | Delete everything |
 
 ## Key Metrics Endpoints
@@ -68,10 +66,10 @@ cat /home/ubuntu/kepler-info.txt
 
 - **Cost**: ~$4.08/hour
 - **Budget**: $344.70 = ~84 hours
-- **Stop when idle**: `./stop-stack.sh`
-- **Delete when done**: `./delete-stack.sh`
+- **Stop when idle**: Use AWS CLI to stop instance
+- **Delete when done**: `scripts/delete-stack.sh`
 
-## Demo Workload
+## Sample Workload
 
 ```bash
 # SSH to instance
@@ -96,8 +94,8 @@ watch -n 2 "curl -k -s https://localhost:30443/metrics | grep kepler_node_cpu_wa
 
 **Need to re-deploy?**
 ```bash
-./delete-stack.sh
-./deploy-automated-stack.sh
+scripts/delete-stack.sh
+scripts/create-stack.sh
 ```
 
 ## Documentation
@@ -122,4 +120,4 @@ All the troubleshooting we did is now automated:
 
 ---
 
-**Next**: Run `./deploy-automated-stack.sh` and wait for metrics!
+**Next**: Run `scripts/create-stack.sh` and wait for metrics!

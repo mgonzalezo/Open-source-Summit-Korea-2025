@@ -2,7 +2,7 @@
 
 **Version**: 1.0
 **Date**: 2025-10-13
-**Target**: OSS Korea 2025 Demo - Korean Regulatory Compliance Focus
+**Target**: OSS Korea 2025 Demo Korean Regulatory Compliance
 
 ## Executive Summary
 
@@ -335,7 +335,7 @@ kepler_container_joules_total
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│ Step 5: User-Friendly Presentation                              │
+│ Step 5: User-Friendly Response                                  │
 │                                                                  │
 │ Claude Desktop displays:                                        │
 │                                                                  │
@@ -969,87 +969,21 @@ TOTAL                         ~1,230 lines
 - [ ] Performance testing
 - [ ] Documentation
 
-### Phase 7: Demo Preparation (Day 7)
-- [ ] Create demo workloads (compliant + non-compliant)
-- [ ] Prepare demo script
-- [ ] Create presentation slides
-- [ ] Practice demo flow
+### Phase 7: Testing & Validation
+- [ ] Create test workloads (compliant + non-compliant)
+- [ ] Validate end-to-end flow
+- [ ] Performance testing
 
-## Demo Talking Points (OSS Korea 2025)
+## Technical Summary
 
-### Introduction (2 minutes)
-"Today I'll demonstrate how we can make Kubernetes workloads compliant with Korean carbon neutrality standards using Kepler and AI-powered compliance checking."
-
-### Problem Statement (3 minutes)
-- Korea's Carbon Neutrality Act (탄소중립 녹색성장 기본법) requires 2050 net-zero
-- Data centers must achieve PUE ≤ 1.4 for Green certification (에너지이용 합리화법)
-- Korea's grid intensity: 424 gCO2eq/kWh (coal 35%, gas 28%, nuclear 25%)
-- Challenge: How to monitor and optimize workload carbon footprint in real-time?
-
-### Architecture Overview (5 minutes)
-- **Layer 1: Kepler** - eBPF-based energy monitoring
-  - Why Kepler? Real metrics, not simulations
-  - Why bare-metal? Direct hardware access for accurate measurements
-  - Why Model Server? AWS doesn't expose RAPL, need ML-based estimation
-
-- **Layer 2: Carbon MCP Server** - Compliance intelligence
-  - Korean regulatory standards
-  - Real-time carbon calculations
-  - Actionable recommendations
-
-- **Layer 3: Claude Desktop** - Natural language interface
-  - Ask: "Is my ML workload compliant with Korean standards?"
-  - Get: Clear COMPLIANT/NON_COMPLIANT status with recommendations
-
-### Live Demo (10 minutes)
-
-**Demo 1: Non-Compliant Workload**
-```
-User: "Check if ml-training-job complies with Korean carbon standards"
-
-Claude: "Your ml-training-job is NON-COMPLIANT:
-- Current: 510 gCO2eq/kWh
-- Target: 424 gCO2eq/kWh (20% over)
-- PUE: 1.6 (exceeds 1.4 target)
-
-Recommendations:
-1. Reschedule to 2am-6am KST (10% cleaner grid)
-2. Right-size CPU from 8 to 6 cores (15% power reduction)
-3. Consider eu-north-1 (50% cleaner grid)"
-```
-
-**Demo 2: Optimization Impact**
-```
-User: "What's the impact of rescheduling to 2am?"
-
-Claude: "Rescheduling ml-training-job to 2am-6am KST:
-- Reduction: 10% (51 gCO2eq/kWh saved)
-- New intensity: 459 gCO2eq/kWh
-- Status: Still NON-COMPLIANT (need additional optimizations)
-- Combined with CPU right-sizing: COMPLIANT (398 gCO2eq/kWh)"
-```
-
-**Demo 3: Regional Comparison**
-```
-User: "Compare carbon impact across AWS regions"
-
-Claude: "Regional comparison for ml-training-job:
-- ap-northeast-2 (Seoul): 510 gCO2eq/kWh - NON_COMPLIANT
-- us-east-1 (Virginia): 540 gCO2eq/kWh - NON_COMPLIANT
-- eu-north-1 (Stockholm): 60 gCO2eq/kWh - COMPLIANT 
-
-Best region: eu-north-1 (88% reduction)
-Migration recommendation: Consider for batch workloads"
-```
-
-### Technical Highlights (3 minutes)
-- **Real eBPF metrics**: Not simulated, actual CPU cycles, cache misses, memory I/O
+### Key Features
+- **Real eBPF metrics**: Actual CPU cycles, cache misses, memory I/O
 - **ML-based power estimation**: Works on AWS where RAPL unavailable
 - **Korean regulatory focus**: PUE 1.4, Carbon Neutrality 2050, 424 gCO2/kWh
 - **MCP protocol**: Standardized AI integration, works with Claude Desktop
 - **Production-ready**: K8s deployment, RBAC, ConfigMaps, HTTPS
 
-### Future Enhancements (2 minutes)
+### Future Enhancements
 - **Carbon Aware SDK integration**: Real-time grid data instead of static averages
 - **Temporal optimization**: Automatic workload scheduling based on grid cleanliness
 - **Multi-cloud support**: GCP, Azure carbon footprint tracking
@@ -1059,8 +993,6 @@ Migration recommendation: Consider for batch workloads"
 
 **Total Estimated Lines of Code**: ~1,230 lines
 **Deployment Time**: ~5 minutes (K8s manifests)
-**Demo Duration**: 25 minutes
-**Target Audience**: OSS Korea 2025 - Sustainability Track
 
 ---
 
@@ -1069,4 +1001,3 @@ Migration recommendation: Consider for batch workloads"
 2. Generate implementation files (Phase 1-7)
 3. Deploy to AWS K3s cluster
 4. Test end-to-end flow
-5. Prepare demo script for OSS Korea 2025

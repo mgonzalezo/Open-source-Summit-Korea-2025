@@ -95,7 +95,7 @@ The working solution required:
 | **Power Estimation** | Model Server ML models | Uses real metrics + trained models (ec2-0.7.11, specpower-0.7.11) |
 | **Deployment Method** | Direct Helm chart | Operator's PowerMonitor CRD too restrictive for our use case |
 
-**Important for Demo**: While we use a "fake" CPU meter for initialization, **all workload data is real**. The model server then uses these real metrics to estimate power consumption based on ML models trained on actual hardware.
+**Important**: While we use a "fake" CPU meter for initialization, **all workload data is real**. The model server then uses these real metrics to estimate power consumption based on ML models trained on actual hardware.
 
 ## Deployed Components
 
@@ -228,25 +228,6 @@ kepler_process_cpu_seconds_total{comm="ModemManager",pid="7309",...} 0.17
    - Does NOT affect workload metric accuracy
    - Gets overridden by model server estimates
 
-## Demo Talking Points
-
-### When Presenting to Audience
-
-#### 1. **Challenge: Cloud Bare-Metal Limitations**
-> "Even though we're running on AWS c5.metal bare-metal instances, we encountered a challenge: AWS doesn't expose RAPL power metrics through the standard Linux interface. While the hardware supports it, the AWS-customized kernel lacks the necessary modules."
-
-#### 2. **Solution: Model-Based Estimation**
-> "To solve this, we deployed Kepler's Model Server, which uses machine learning models trained on real AWS EC2 hardware. This allows us to estimate power consumption based on actual CPU usage patterns collected via eBPF."
-
-#### 3. **Data Accuracy**
-> "It's important to note: all workload metrics you see - CPU usage, process execution time, memory access - these are 100% real measurements from the Linux kernel. Only the power consumption values are estimated, but they're based on models trained on actual c5.metal hardware."
-
-#### 4. **Why Not Just Use Kepler Operator?**
-> "We initially tried the Kepler Operator, but it requires hardware power sources at initialization. Since AWS doesn't expose RAPL via sysfs, we had to deploy Kepler directly via Helm with a workaround configuration and add the model server for power estimation."
-
-#### 5. **Real-World Applicability**
-> "This setup demonstrates a real-world scenario many organizations face: you want to monitor energy consumption in cloud environments where you don't have direct hardware access. Kepler's model-based approach makes this possible."
-
 ## Kubernetes Commands
 
 ```bash
@@ -302,9 +283,21 @@ sudo kubectl logs -n kepler-model-server -l app.kubernetes.io/name=kepler-model-
 
 ```bash
 # From local machine in aws-deployment/scripts/
-./stop-stack.sh    # Stops instance, keeps EBS volumes
-./start-stack.sh   # Starts instance, preserves all data
-./delete-stack.sh  # Deletes everything, frees all resources
+# Get instance ID
+INSTANCE_ID=$(aws cloudformation describe-stack-resources \
+  --stack-name kepler-k3s-stack \
+  --query 'StackResources[?ResourceType==`AWS::EC2::Instance`].PhysicalResourceId' \
+  --output text \
+  --profile mgonzalezo)
+
+# Stop instance (keeps EBS volumes)
+aws ec2 stop-instances --instance-ids $INSTANCE_ID --profile mgonzalezo
+
+# Start instance (preserves all data)
+aws ec2 start-instances --instance-ids $INSTANCE_ID --profile mgonzalezo
+
+# Delete everything (frees all resources)
+scripts/delete-stack.sh
 ```
 
 ## Troubleshooting Guide
@@ -397,7 +390,7 @@ aws ec2 authorize-security-group-ingress \
 kubectl delete pod -n kepler-system -l app=kepler-https-proxy
 ```
 
-## AWS-Specific Limitations (Important for Demo)
+## AWS-Specific Limitations
 
 ### 1. RAPL Availability on AWS
 - **Limitation**: AWS doesn't expose RAPL via `/sys/class/powercap/` even on bare-metal
@@ -425,22 +418,8 @@ Despite limitations, c5.metal provides:
 - Representative of real-world cloud constraints
 - Models trained on same hardware
 
-## Next Steps for Presentation
+## Sample Workload
 
-### Before the Demo
-1.  Let Kepler collect baseline data (15-30 minutes)
-2.  Prepare sample workloads to show power consumption changes
-3.  Set up Grafana dashboard (optional but impressive)
-4.  Practice explaining model server vs real RAPL
-
-### During the Demo
-1. Show HTTPS metrics endpoint
-2. Explain AWS limitations and solution
-3. Demonstrate real CPU metrics collection
-4. Show model server providing power estimates
-5. Deploy sample workload and observe power changes
-
-### Sample Workload Ideas
 ```bash
 # CPU-intensive workload
 kubectl run stress --image=polinux/stress -- stress --cpu 4 --timeout 60s

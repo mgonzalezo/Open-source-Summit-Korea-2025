@@ -1,6 +1,6 @@
 # Kepler Bare-Metal CloudFormation Stack
 
-This CloudFormation stack automates the deployment of a bare-metal EC2 instance with Kind and Kepler pre-configured for the Open Source Summit Korea 2025 presentation.
+This CloudFormation stack automates the deployment of a bare-metal EC2 instance with Kind and Kepler pre-configured.
 
 ##  Overview
 
@@ -16,7 +16,7 @@ The stack creates:
 ### 1. Deploy the Stack
 
 ```bash
-./deploy-stack.sh
+scripts/create-stack.sh
 ```
 
 This interactive script will:
@@ -31,7 +31,7 @@ This interactive script will:
 ### 2. Connect to Instance
 
 ```bash
-# Use the SSH command provided by deploy-stack.sh
+# Use the SSH command provided by create-stack.sh
 ssh -i ~/.ssh/your-key.pem ubuntu@<PUBLIC_IP>
 ```
 
@@ -44,7 +44,7 @@ Once connected to the instance:
 tail -f /var/log/user-data.log
 
 # When ready, run the setup script
-./setup-kepler.sh
+scripts/setup-kepler.sh
 ```
 
 This will:
@@ -70,7 +70,7 @@ curl http://localhost:28282/metrics | grep kepler
 
 ### Check Stack Status
 ```bash
-./check-stack.sh
+scripts/check-stack.sh
 ```
 Displays:
 - Stack status
@@ -81,7 +81,7 @@ Displays:
 
 ### Stop Instance (Save Costs)
 ```bash
-./stop-stack.sh
+scripts/stop-stack.sh
 ```
 - Stops the EC2 instance
 - You only pay for EBS storage (~$10/month for 100GB)
@@ -89,7 +89,7 @@ Displays:
 
 ### Start Instance
 ```bash
-./start-stack.sh
+scripts/start-stack.sh
 ```
 - Starts a stopped instance
 - Resumes billing
@@ -97,7 +97,7 @@ Displays:
 
 ### Delete Stack (Complete Cleanup)
 ```bash
-./delete-stack.sh
+scripts/delete-stack.sh
 ```
 - **Permanently deletes** all resources
 - Requires typing "delete" to confirm
@@ -124,13 +124,13 @@ Displays:
 
 1. **Stop when not using:**
    ```bash
-   ./stop-stack.sh
+   scripts/stop-stack.sh
    ```
    Storage cost: ~$10/month vs ~$4-6/hour when running
 
 2. **Use check-stack.sh regularly:**
    ```bash
-   ./check-stack.sh
+   scripts/check-stack.sh
    ```
    Shows current costs and uptime
 
@@ -151,7 +151,7 @@ Displays:
 
 4. **Delete when completely done:**
    ```bash
-   ./delete-stack.sh
+   scripts/delete-stack.sh
    ```
 
 ##  Files Created by CloudFormation
@@ -172,7 +172,7 @@ Displays:
 ```
 .
 ├── kepler-baremetal-stack.yaml   # CloudFormation template
-├── deploy-stack.sh               # Deploy script
+├── create-stack.sh               # Deploy script
 ├── start-stack.sh                # Start stopped instance
 ├── stop-stack.sh                 # Stop running instance
 ├── delete-stack.sh               # Delete everything
@@ -205,7 +205,7 @@ aws cloudformation describe-stack-events \
 
 2. **Verify instance is running:**
    ```bash
-   ./check-stack.sh
+   scripts/check-stack.sh
    ```
 
 3. **Check SSH key permissions:**
@@ -223,7 +223,7 @@ aws cloudformation describe-stack-events \
 
 2. **Manually run setup:**
    ```bash
-   ./setup-kepler.sh
+   scripts/setup-kepler.sh
    ```
 
 ### Kepler Operator Not Working
@@ -249,7 +249,7 @@ aws cloudformation describe-stack-events \
  Real hardware power monitoring (RAPL)
  Accurate energy metrics
  Production-like environment
- Suitable for demos and presentations
+ Suitable for testing
 
 ### Alternative (VM/Cloud)
 ️ No direct hardware access
@@ -282,7 +282,7 @@ For issues related to:
 ## ️ Important Reminders
 
 1. **Always stop or delete when done** to avoid unexpected charges
-2. **Use `./check-stack.sh`** regularly to monitor costs
+2. **Use `scripts/check-stack.sh`** regularly to monitor costs
 3. **Budget ~$4-6/hour** for running instances
 4. **Set billing alarms** in AWS Console
 5. **Your SSH key is stored** in `~/.ssh/` - keep it safe!
@@ -291,23 +291,23 @@ For issues related to:
 
 ```bash
 # Day 1: Deploy
-./deploy-stack.sh
+scripts/create-stack.sh
 # ... work on Kepler demo ...
-./stop-stack.sh
+scripts/stop-stack.sh
 
 # Day 2: Continue work
-./check-stack.sh
-./start-stack.sh
+scripts/check-stack.sh
+scripts/start-stack.sh
 # ... more demo work ...
-./stop-stack.sh
+scripts/stop-stack.sh
 
-# Day 3: Presentation day
-./start-stack.sh
-# ... give presentation ...
-./stop-stack.sh
+# Day 3: Testing day
+scripts/start-stack.sh
+# ... testing ...
+scripts/stop-stack.sh
 
-# After event: Cleanup
-./delete-stack.sh
+# Cleanup
+scripts/delete-stack.sh
 ```
 
 ---

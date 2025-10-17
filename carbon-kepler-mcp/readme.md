@@ -57,13 +57,13 @@ This MCP server provides tools for assessing Kubernetes workload compliance with
 
 ```bash
 cd carbon-kepler-mcp
-./scripts/build.sh
+scripts/scripts/build.sh
 ```
 
 Or specify custom registry:
 
 ```bash
-REGISTRY=your-registry.io ./scripts/build.sh
+REGISTRY=your-registry.io scripts/scripts/build.sh
 ```
 
 ### 3. Deploy to Kubernetes
@@ -71,7 +71,7 @@ REGISTRY=your-registry.io ./scripts/build.sh
 ```bash
 # Update deployment.yaml with your Kepler endpoint and registry
 # Then deploy:
-./scripts/deploy.sh
+scripts/scripts/deploy.sh
 ```
 
 ### 4. Test MCP Server
@@ -84,7 +84,7 @@ PUBLIC_IP=$(kubectl get svc carbon-mcp-server -n carbon-mcp -o jsonpath='{.statu
 MCP_ENDPOINT="http://$PUBLIC_IP:30800" \
 WORKLOAD="kepler" \
 NAMESPACE="kepler-system" \
-./scripts/test-mcp.sh
+scripts/scripts/test-mcp.sh
 ```
 
 ## MCP Tools

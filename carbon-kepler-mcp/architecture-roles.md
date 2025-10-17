@@ -351,7 +351,7 @@ Claude: "Your workload is NON-COMPLIANT by 20%.
 
 ---
 
-## Presentation Summary: Roles by Layer
+## Summary: Roles by Layer
 
 ### Layer 1: Kepler Monitoring
 "The Sensor"
@@ -386,7 +386,7 @@ eBPF Counters → Power (Watts) → Carbon (gCO2/kWh) → Compliance
 
 ---
 
-## Presentation Talking Points
+## Key Points
 
 ### Layer 1 Slide
 "Real Metrics, Real Impact"

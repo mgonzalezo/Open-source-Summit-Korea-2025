@@ -67,7 +67,7 @@ ls manifests/helm/kepler/
 
 ### Step 2: Choose Configuration
 
-#### For Testing/Demo (Containerized environments like kind, minikube)
+#### For Testing (Containerized environments like kind, minikube)
 ```bash
 # Use the simple configuration
 cp /path/to/kepler-simple.yaml .
@@ -84,7 +84,7 @@ cp /path/to/kepler-production.yaml .
 #### Testing Deployment
 ```bash
 # Deploy with simple configuration
-helm install kepler ./manifests/helm/kepler \
+helm install kepler scripts/manifests/helm/kepler \
   --namespace kepler-system \
   --create-namespace \
   -f kepler-simple.yaml
@@ -96,7 +96,7 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=kepler -n keple
 #### Production Deployment
 ```bash
 # Deploy with production configuration
-helm install kepler ./manifests/helm/kepler \
+helm install kepler scripts/manifests/helm/kepler \
   --namespace kepler-system \
   --create-namespace \
   -f kepler-production.yaml

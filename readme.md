@@ -59,9 +59,9 @@ Create a Kind cluster optimized for Kepler:
 
 ```bash
 # Install Kind (if not already installed)
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.25.0/kind-linux-amd64
-chmod +x ./kind
-sudo mv ./kind /usr/local/bin/kind
+curl -Lo scripts/kind https://kind.sigs.k8s.io/dl/v0.25.0/kind-linux-amd64
+chmod +x scripts/kind
+sudo mv scripts/kind /usr/local/bin/kind
 
 # Create Kind cluster with host mounts for system access
 cat <<EOF | kind create cluster --name kepler-demo --config=-
@@ -124,10 +124,10 @@ tar -xzf v0.11.0.tar.gz
 cd kepler-0.11.0
 
 # Install using simple configuration
-helm install kepler ./manifests/helm/kepler \
+helm install kepler scripts/manifests/helm/kepler \
   --namespace kepler-system \
   --create-namespace \
-  -f ../kepler-simple.yaml
+  -f .scripts/kepler-simple.yaml
 ```
 
 ### Verify Installation
@@ -212,7 +212,7 @@ Features:
 Quick start:
 ```bash
 cd aws-deployment/scripts
-./deploy-stack.sh
+scripts/create-stack.sh
 ```
 
 ##  Repository Structure
@@ -331,7 +331,7 @@ Detect unusual power consumption patterns that may indicate issues or inefficien
 
 ##  Contributing
 
-This repository is part of the **Open Source Summit Korea 2025** presentation.
+This repository contains Kepler deployment configurations and Carbon-Aware MCP server implementation.
 
 For contributions to Kepler itself, please visit:
 - [Kepler GitHub Repository](https://github.com/sustainable-computing-io/kepler)
@@ -341,12 +341,6 @@ For contributions to Kepler itself, please visit:
 
 This project follows the same license as Kepler - **Apache License 2.0**
 
-##  Presentation Information
-
-**Event:** Open Source Summit Korea 2025
-**Topic:** Kepler - Energy Monitoring for Kubernetes
-**Repository:** Deployment guides and configurations for Kepler demos
-
----
+##  Documentation
 
 **Questions?** Check the [deployment-guide.md](deployment-guide.md) for detailed instructions or the [aws-deployment/](aws-deployment/) folder for AWS-specific setup.
