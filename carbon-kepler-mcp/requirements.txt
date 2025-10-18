@@ -9,7 +9,7 @@ requests==2.32.3
 
 # Data Validation
 pydantic==2.9.2
-pydantic-settings==2.5.2
+pydantic-settings>=2.6.1
 
 # Date/Time
 python-dateutil==2.9.0.post0
