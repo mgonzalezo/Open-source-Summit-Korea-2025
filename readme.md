@@ -1,346 +1,364 @@
-# Kepler - Kubernetes Efficient Power Level Exporter
-
-Energy monitoring for Kubernetes workloads using eBPF technology.
+# Kepler Energy Monitoring & Carbon Compliance for Kubernetes
 
 **Open Source Summit Korea 2025**
 
-##  What is Kepler?
+This repository demonstrates energy monitoring and carbon compliance assessment for Kubernetes workloads using Kepler (Kubernetes Efficient Power Level Exporter) and Korean regulatory standards.
 
-Kepler (Kubernetes Efficient Power Level Exporter) is a CNCF Sandbox project that uses eBPF to probe energy-related system stats and exports Prometheus metrics to help you monitor the energy consumption of Kubernetes workloads in real-time.
+## Overview
 
-### Key Features
+This project combines two main components:
 
-- **Real-time Energy Monitoring** - Track power consumption of containers, pods, and nodes
-- **eBPF-based** - Low-overhead system stats collection
-- **Prometheus Integration** - Export metrics for visualization and alerting
-- **Hardware Support** - RAPL (Running Average Power Limit) for accurate measurements on bare-metal
-- **Model-based Estimation** - Power estimates for virtualized environments
+1. **AWS Deployment** - Automated infrastructure for running Kepler on AWS bare-metal instances
+2. **Carbon-Kepler MCP** - Model Context Protocol server for Korean carbon compliance assessments
 
-### Architecture
+Together, they provide a complete solution for monitoring energy consumption in Kubernetes and assessing compliance with Korean environmental regulations.
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│           Kubernetes Cluster                    │
-├─────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────┐   │
-│  │  Kepler DaemonSet (runs on each node)    │   │
-│  │  ┌────────────────────────────────────┐  │   │
-│  │  │  eBPF Probes                       │  │   │
-│  │  │  - CPU cycles                      │  │   │
-│  │  │  - Memory access                   │  │   │
-│  │  │  - Network I/O                     │  │   │
-│  │  └────────────────────────────────────┘  │   │
-│  │  ┌────────────────────────────────────┐  │   │
-│  │  │  Power Monitoring                  │  │   │
-│  │  │  - RAPL (bare-metal)               │  │   │
-│  │  │  - Model estimation (VM)           │  │   │
-│  │  └────────────────────────────────────┘  │   │
-│  │  ┌────────────────────────────────────┐  │   │
-│  │  │  Prometheus Exporter :28282        │  │   │
-│  │  └────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────┘   │
-│                                                  │
-│  Prometheus → Grafana → Dashboards              │
-└──────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                  Open Source Summit Korea 2025                 │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ┌──────────────────────────────┐  ┌──────────────────────┐   │
+│  │   aws-deployment/            │  │  carbon-kepler-mcp/  │   │
+│  │                              │  │                      │   │
+│  │  AWS CloudFormation          │  │  MCP Server          │   │
+│  │  ├─ c5.metal instance        │  │  ├─ Compliance tools │   │
+│  │  ├─ K3s cluster              │  │  ├─ Korean standards │   │
+│  │  ├─ Kepler v0.11.2         ──┼──┼─→│  ├─ Carbon Act    │   │
+│  │  ├─ Model Server             │  │  │  └─ PUE targets   │   │
+│  │  └─ HTTPS metrics endpoint   │  │  └─ Recommendations  │   │
+│  │                              │  │                      │   │
+│  │  Real-time energy metrics    │  │  Compliance reports  │   │
+│  └──────────────────────────────┘  └──────────────────────┘   │
+│           Infrastructure                   Analysis            │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-##  Quick Start
+## Project Components
+
+### 1. AWS Deployment (`aws-deployment/`)
+
+Automated CloudFormation-based deployment of Kepler on AWS bare-metal infrastructure.
+
+**Goal:** Provide a production-ready Kepler environment that works around AWS bare-metal limitations (no RAPL access) using ML-based power estimation.
+
+**Architecture:**
+
+- **Infrastructure:** AWS c5.metal bare-metal EC2 instance
+- **Kubernetes:** K3s lightweight distribution
+- **Monitoring:** Kepler v0.11.2 with eBPF metrics collection
+- **Power Estimation:** Kepler Model Server with AWS EC2 models
+- **Access:** HTTPS/HTTP metrics endpoints with TLS
+- **Automation:** Fully automated deployment (~15 minutes)
+
+**Key Features:**
+
+- Zero-configuration deployment
+- Real eBPF metrics for CPU, memory, processes
+- ML-based power estimation when hardware RAPL unavailable
+- Cost-efficient stop/start capability
+- Complete CloudFormation automation
+
+**Quick Start:**
+
+```bash
+cd aws-deployment/scripts
+./create-stack.sh
+```
+
+**Use Cases:**
+
+- Production Kepler deployments on AWS
+- Energy monitoring in cloud environments
+- Testing power estimation models
+- Kubernetes energy observability
+
+See [aws-deployment/readme.md](aws-deployment/readme.md) for complete documentation.
+
+---
+
+### 2. Carbon-Kepler MCP (`carbon-kepler-mcp/`)
+
+Model Context Protocol (MCP) server that integrates Kepler metrics with Korean regulatory compliance standards.
+
+**Goal:** Assess Kubernetes workload compliance with Korean carbon neutrality and energy efficiency regulations through an AI-accessible interface.
+
+**Architecture:**
+
+- **Protocol:** MCP (Model Context Protocol) for Claude AI integration
+- **Standards:** Korean Carbon Neutrality Act 2050 & Energy Use Rationalization Act
+- **Data Source:** Kepler metrics via Prometheus endpoint
+- **Deployment:** Kubernetes-native with ConfigMaps and RBAC
+- **Output:** Compliance assessments and actionable recommendations
+
+**Key Features:**
+
+- **5 MCP Tools:**
+  - `assess_workload_compliance` - Check single workload compliance
+  - `compare_optimization_impact` - Before/after carbon analysis
+  - `list_workloads_by_compliance` - Namespace-wide inventory
+  - `get_regional_comparison` - Multi-region carbon comparison
+  - `calculate_optimal_schedule` - Time-based optimization
+
+- **Korean Regulatory Standards:**
+  - Carbon Neutrality Act 2050: 424 gCO2eq/kWh target
+  - Energy Use Rationalization Act: PUE ≤ 1.4 for Green Data Centers
+
+- **Actionable Recommendations:**
+  - Temporal shifting to low-carbon time windows
+  - Resource rightsizing and optimization
+  - Regional migration for lower carbon intensity
+
+**Quick Start:**
+
+```bash
+cd carbon-kepler-mcp
+./scripts/build.sh
+./scripts/deploy.sh
+```
+
+**Use Cases:**
+
+- Carbon compliance reporting for Korean regulations
+- AI-assisted sustainability analysis
+- Workload optimization for carbon reduction
+- Multi-cloud carbon comparison
+
+See [carbon-kepler-mcp/readme.md](carbon-kepler-mcp/readme.md) for complete documentation.
+
+## Integration Flow
+
+```text
+1. AWS Infrastructure Setup
+   └─> deploy aws-deployment/
+       └─> Creates c5.metal instance with K3s + Kepler
+           └─> Exposes HTTPS metrics endpoint
+
+2. Kepler Metrics Collection
+   └─> eBPF probes collect real-time metrics
+       └─> Model Server estimates power consumption
+           └─> Prometheus metrics at https://<IP>:30443/metrics
+
+3. Carbon Compliance Assessment
+   └─> deploy carbon-kepler-mcp/
+       └─> MCP server fetches Kepler metrics
+           └─> Applies Korean regulatory standards
+               └─> Generates compliance reports + recommendations
+
+4. AI-Assisted Analysis
+   └─> Claude Desktop integration via MCP
+       └─> Natural language queries
+           └─> "Check if my ml-training-job complies with Korean standards"
+```
+
+## Repository Structure
+
+```text
+Open-source-Summit-Korea-2025/
+├── readme.md                      # This file - High-level overview
+│
+├── aws-deployment/                # AWS Infrastructure
+│   ├── readme.md                 # Complete AWS deployment guide
+│   ├── quick-start.md            # One-page quick reference
+│   ├── automated-deployment.md   # Automation details
+│   ├── kepler-deployment-summary.md  # Technical deep dive
+│   ├── scripts/
+│   │   ├── create-stack.sh       # Deploy CloudFormation stack
+│   │   └── delete-stack.sh       # Clean up resources
+│   └── templates/
+│       └── kepler-k3s-automated-stack.yaml  # CloudFormation template
+│
+└── carbon-kepler-mcp/             # Carbon Compliance MCP Server
+    ├── readme.md                 # Complete MCP documentation
+    ├── src/                      # Python MCP server implementation
+    │   ├── mcp_server.py         # Main MCP server
+    │   ├── kepler_client.py      # Kepler integration
+    │   ├── korea_compliance.py   # Korean standards logic
+    │   └── recommendation_engine.py  # Optimization suggestions
+    ├── config/                   # Korean regulatory data
+    │   ├── carbon-intensity.json # Hourly carbon intensity
+    │   ├── regulations.json      # Korean regulations
+    │   └── regions.json          # Regional carbon data
+    ├── k8s/                      # Kubernetes manifests
+    │   ├── deployment.yaml
+    │   ├── service.yaml
+    │   └── configmap.yaml
+    └── scripts/
+        ├── build.sh              # Build Docker image
+        ├── deploy.sh             # Deploy to Kubernetes
+        └── test-mcp.sh           # Test MCP tools
+```
+
+## What is Kepler?
+
+Kepler (Kubernetes Efficient Power Level Exporter) is a CNCF Sandbox project that uses eBPF to probe energy-related system stats and exports Prometheus metrics for monitoring energy consumption of Kubernetes workloads.
+
+**Key Capabilities:**
+
+- Real-time energy monitoring at container, pod, and node levels
+- eBPF-based low-overhead system metrics collection
+- Hardware power monitoring (RAPL) on bare-metal
+- ML-based power estimation for cloud/virtualized environments
+- Prometheus integration for observability
+
+**Why This Project?**
+
+- **AWS Challenge:** Cloud environments don't expose hardware RAPL interfaces
+- **Solution:** Kepler Model Server provides ML-based power estimation
+- **Korean Context:** Compliance with national carbon neutrality and energy efficiency standards
+- **AI Integration:** MCP protocol enables natural language compliance queries
+
+## Korean Regulatory Standards
+
+This project specifically addresses two Korean environmental regulations:
+
+### 1. 탄소중립 녹색성장 기본법 (Carbon Neutrality Act)
+
+- **Goal:** Carbon neutrality by 2050
+- **Interim Target:** 35% reduction by 2030 (vs 2018 baseline)
+- **Grid Intensity:** 424 gCO2eq/kWh
+- **Reference:** [법령정보](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=230613)
+
+### 2. 에너지이용 합리화법 (Energy Use Rationalization Act)
+
+- **Goal:** Green Data Center certification
+- **Target PUE:** ≤ 1.4
+- **Authority:** MOTIE (Ministry of Trade, Industry and Energy)
+- **Reference:** [법령정보](https://www.law.go.kr/법령/에너지이용합리화법)
+
+## Getting Started
 
 ### Prerequisites
 
-- **Kubernetes cluster** (Kind, minikube, or production)
-- **Helm 3.x** installed
-- **kubectl** configured
-- **cert-manager** v1.18.0+ (for Kepler Operator)
+- AWS Account with ~$344 USD credits (for 84 hours on c5.metal)
+- AWS CLI configured
+- kubectl installed
+- Docker (for building MCP server)
+- Python 3.9+ (for local MCP development)
 
-### Option 1: Local Kind Cluster (Recommended for Testing)
+### Quick Deployment
 
-Create a Kind cluster optimized for Kepler:
+**1. Deploy Kepler Infrastructure:**
 
-```bash
-# Install Kind (if not already installed)
-curl -Lo scripts/kind https://kind.sigs.k8s.io/dl/v0.25.0/kind-linux-amd64
-chmod +x scripts/kind
-sudo mv scripts/kind /usr/local/bin/kind
-
-# Create Kind cluster with host mounts for system access
-cat <<EOF | kind create cluster --name kepler-demo --config=-
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-- role: control-plane
-  extraMounts:
-  - hostPath: /sys
-    containerPath: /sys
-    readOnly: true
-  - hostPath: /proc
-    containerPath: /proc
-    readOnly: true
-EOF
-
-# Wait for cluster to be ready
-kubectl wait --for=condition=ready node --all --timeout=300s
-```
-
-### Option 2: Existing Kubernetes Cluster
-
-If you already have a cluster, ensure you have proper access:
-
-```bash
-kubectl cluster-info
-kubectl get nodes
-```
-
-### Install Kepler
-
-#### Method 1: Using Kepler Operator (Recommended)
-
-```bash
-# 1. Install cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml
-
-# Wait for cert-manager to be ready
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
-
-# 2. Install Kepler Operator
-helm install kepler-operator \
-  oci://quay.io/sustainable_computing_io/charts/kepler-operator \
-  --namespace kepler-operator \
-  --create-namespace \
-  --wait
-
-# 3. Verify installation
-kubectl get pods -n kepler-operator
-```
-
-#### Method 2: Using Helm Chart Directly
-
-For testing in containerized environments (like Kind):
-
-```bash
-# Download Kepler v0.11.0
-wget https://github.com/sustainable-computing-io/kepler/archive/refs/tags/v0.11.0.tar.gz
-tar -xzf v0.11.0.tar.gz
-cd kepler-0.11.0
-
-# Install using simple configuration
-helm install kepler scripts/manifests/helm/kepler \
-  --namespace kepler-system \
-  --create-namespace \
-  -f .scripts/kepler-simple.yaml
-```
-
-### Verify Installation
-
-```bash
-# Check if Kepler pods are running
-kubectl get pods -n kepler-operator
-# or for direct Helm installation:
-kubectl get pods -n kepler-system
-
-# Port forward to access metrics
-kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282 &
-# or for direct Helm installation:
-kubectl port-forward -n kepler-system service/kepler 28282:28282 &
-
-# Check Kepler metrics
-curl http://localhost:28282/metrics | grep kepler
-```
-
-##  Available Metrics
-
-Kepler exposes energy consumption metrics via Prometheus:
-
-### Container-level Metrics
-- `kepler_container_cpu_joules_total` - CPU energy consumption per container
-- `kepler_container_dram_joules_total` - Memory energy consumption per container
-- `kepler_container_other_joules_total` - Other component energy per container
-- `kepler_container_gpu_joules_total` - GPU energy consumption per container (if available)
-
-### Node-level Metrics
-- `kepler_node_cpu_joules_total` - Node CPU energy consumption
-- `kepler_node_dram_joules_total` - Node memory energy consumption
-- `kepler_node_other_joules_total` - Other node component energy
-- `kepler_node_platform_joules_total` - Total platform energy
-
-### Process-level Metrics
-- `kepler_process_cpu_joules_total` - CPU energy per process
-- `kepler_process_dram_joules_total` - Memory energy per process
-
-### Example Queries
-
-```bash
-# Total energy consumption by namespace
-curl http://localhost:28282/metrics | grep 'kepler_container.*joules_total' | grep 'namespace="default"'
-
-# Node-level power consumption
-curl http://localhost:28282/metrics | grep 'kepler_node.*joules_total'
-```
-
-##  Configuration
-
-### For Testing/Demo Environments (Kind, minikube)
-
-Use **kepler-simple.yaml** configuration:
-- Disables Kubernetes integration for compatibility
-- Enables fake CPU meter when RAPL unavailable
-- Minimal security restrictions
-- Lower resource limits
-
-### For Production Environments
-
-Use **kepler-production.yaml** configuration:
-- Full Kubernetes integration enabled
-- Proper security contexts and privileges
-- RBAC and ServiceMonitor for Prometheus
-- Hardware power monitoring (RAPL) enabled
-- Health checks and disruption budgets
-
-## ️ AWS Bare-Metal Deployment
-
-For **real hardware power monitoring (RAPL)** on AWS bare-metal instances:
-
-** See [aws-deployment/](aws-deployment/) folder**
-
-Features:
-- Automated CloudFormation deployment
-- c5.metal instance with real RAPL support
-- Pre-configured Kind cluster
-- Cost management scripts
-- ~$4-6/hour (~84 hours with $344 credits)
-
-Quick start:
 ```bash
 cd aws-deployment/scripts
-scripts/create-stack.sh
+./create-stack.sh
+# Wait ~15 minutes for complete deployment
 ```
 
-##  Repository Structure
-
-```
-.
-├── README.md                   # This file - Kepler basics and setup
-├── kepler-simple.yaml          # Config for testing/demo environments
-├── kepler-production.yaml      # Config for production environments
-├── deployment-guide.md         # Detailed manual deployment guide
-│
-└── aws-deployment/             # AWS bare-metal deployment
-    ├── README.md              # Complete AWS deployment guide
-    ├── QUICKSTART.md          # 15-minute quick start
-    ├── scripts/               # Management scripts
-    └── templates/             # CloudFormation templates
-```
-
-##  Troubleshooting
-
-### Common Issues
-
-**1. CrashLoopBackOff in containerized environments**
-- **Cause:** RAPL hardware monitoring unavailable in containers
-- **Solution:** Use `kepler-simple.yaml` with fake CPU meter enabled
-
-**2. Permission denied errors**
-- **Cause:** Insufficient security context or volume mounts
-- **Solution:** Verify security context and ensure proper host path mounts
-
-**3. No metrics available**
-- **Cause:** Service not accessible or monitoring not initialized
-- **Solution:**
-  ```bash
-  # Check pod logs
-  kubectl logs -n kepler-operator -l app.kubernetes.io/name=kepler-operator
-
-  # Verify port-forward
-  kubectl port-forward -n kepler-operator svc/kepler-operator 28282:28282
-
-  # Test metrics endpoint
-  curl http://localhost:28282/metrics
-  ```
-
-**4. High resource usage**
-- **Cause:** Aggressive monitoring intervals or debug logging
-- **Solution:** Adjust monitoring interval in configuration (increase from 3s to 5s or 10s)
-
-### Debug Commands
+**2. Verify Kepler Metrics:**
 
 ```bash
-# Get detailed pod information
-kubectl describe pod -n kepler-operator -l app.kubernetes.io/name=kepler-operator
+# Get public IP from stack output
+PUBLIC_IP=$(aws cloudformation describe-stacks \
+  --stack-name kepler-k3s-stack \
+  --query 'Stacks[0].Outputs[?OutputKey==`PublicIP`].OutputValue' \
+  --output text)
 
-# Check events
-kubectl get events -n kepler-operator --sort-by=.metadata.creationTimestamp
-
-# Check if RAPL is available (on bare-metal only)
-kubectl exec -n kepler-operator -l app.kubernetes.io/name=kepler-operator -- ls -la /sys/class/powercap/
+# Test metrics endpoint
+curl -k https://$PUBLIC_IP:30443/metrics | grep kepler_node_cpu
 ```
 
-##  Visualization with Grafana
+**3. Deploy Carbon Compliance MCP:**
 
-### Import Kepler Dashboard
+```bash
+cd carbon-kepler-mcp
 
-1. **Install Grafana** (if not already installed):
-   ```bash
-   helm repo add grafana https://grafana.github.io/helm-charts
-   helm install grafana grafana/grafana --namespace monitoring --create-namespace
-   ```
+# Update k8s/deployment.yaml with your Kepler endpoint
+# Then build and deploy
+./scripts/build.sh
+./scripts/deploy.sh
+```
 
-2. **Access Grafana**:
-   ```bash
-   kubectl port-forward -n monitoring svc/grafana 3000:80
-   ```
-   Default credentials: admin / (get password with below command)
-   ```bash
-   kubectl get secret --namespace monitoring grafana -o jsonpath="{.data.admin-password}" | base64 --decode
-   ```
+**4. Test Compliance Assessment:**
 
-3. **Import Kepler Dashboard**:
-   - Dashboard ID: **15174** (Kepler Energy Dashboard)
-   - Or import from: https://grafana.com/grafana/dashboards/15174
+```bash
+# Test MCP server
+./scripts/test-mcp.sh
+```
 
-##  Use Cases
+## Use Cases
 
-### 1. Cost Optimization
-Monitor energy consumption to identify power-hungry workloads and optimize resource allocation.
+### 1. Energy Monitoring
 
-### 2. Sustainability Reporting
-Track and report on the carbon footprint of your Kubernetes workloads.
+Monitor real-time energy consumption of Kubernetes workloads using eBPF and ML estimation.
 
-### 3. Capacity Planning
-Understand power requirements for scaling decisions and infrastructure planning.
+### 2. Carbon Compliance
 
-### 4. Anomaly Detection
-Detect unusual power consumption patterns that may indicate issues or inefficiencies.
+Assess compliance with Korean carbon neutrality and PUE targets for data centers.
 
-##  Additional Resources
+### 3. Workload Optimization
 
-### Kepler Documentation
+Get AI-powered recommendations for:
+
+- Temporal shifting to low-carbon time windows
+- Resource rightsizing
+- Regional migration
+
+### 4. Sustainability Reporting
+
+Generate compliance reports for Korean environmental regulations with actual metrics.
+
+### 5. AI-Assisted Analysis
+
+Natural language queries via Claude Desktop:
+
+- "Which workloads exceed Korean carbon targets?"
+- "What's the optimal time to run my ML training job?"
+- "Compare carbon impact across AWS regions"
+
+## Cost Management
+
+**AWS Infrastructure Costs (us-east-1):**
+
+- c5.metal: $4.08/hour (~84 hours with $344 budget)
+- Stop instance when not in use to save costs
+- Only EBS storage charges when stopped (~$10/month)
+
+## Documentation
+
+### AWS Deployment
+
+- [aws-deployment/readme.md](aws-deployment/readme.md) - Complete guide
+- [aws-deployment/quick-start.md](aws-deployment/quick-start.md) - Quick reference
+- [aws-deployment/automated-deployment.md](aws-deployment/automated-deployment.md) - Automation details
+
+### Carbon MCP
+
+- [carbon-kepler-mcp/readme.md](carbon-kepler-mcp/readme.md) - Complete MCP documentation
+- Korean regulatory standards implementation
+- MCP tools reference
+
+## Resources
+
+### Kepler Project
+
 - [Official Website](https://sustainable-computing.io/)
 - [GitHub Repository](https://github.com/sustainable-computing-io/kepler)
+- [Kepler Model Server](https://github.com/sustainable-computing-io/kepler-model-server)
 - [CNCF Project Page](https://landscape.cncf.io/project=kepler)
-- [Kepler Slack Channel](https://cloud-native.slack.com/archives/C05V82F7PPF)
 
-### Related Projects
-- [Prometheus](https://prometheus.io/) - Metrics collection
-- [Grafana](https://grafana.com/) - Visualization
-- [cert-manager](https://cert-manager.io/) - Certificate management
-- [Kind](https://kind.sigs.k8s.io/) - Local Kubernetes clusters
+### MCP Protocol
 
-### Research Papers
-- [Kepler: A Framework for Kubernetes Energy Metrics](https://arxiv.org/abs/2303.03187)
-- [Sustainable Computing](https://www.sustainable-computing.io/research/)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [MCP Specification](https://spec.modelcontextprotocol.io/)
+- [Claude Desktop Integration](https://docs.anthropic.com/claude/docs/model-context-protocol)
 
-##  Contributing
+### Korean Regulations
 
-This repository contains Kepler deployment configurations and Carbon-Aware MCP server implementation.
+- [Carbon Neutrality Act](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=230613)
+- [Energy Use Rationalization Act](https://www.law.go.kr/법령/에너지이용합리화법)
 
-For contributions to Kepler itself, please visit:
-- [Kepler GitHub Repository](https://github.com/sustainable-computing-io/kepler)
-- [Kepler Community Guide](https://sustainable-computing.io/community/)
+## License
 
-##  License
+Apache License 2.0
 
-This project follows the same license as Kepler - **Apache License 2.0**
+## Author
 
-##  Documentation
+Marco Gonzalez (margonza@redhat.com)
 
-**Questions?** Check the [deployment-guide.md](deployment-guide.md) for detailed instructions or the [aws-deployment/](aws-deployment/) folder for AWS-specific setup.
+---
+**Technology Stack:**
+CloudFormation, K3s, Kepler, eBPF, Prometheus, Python MCP, Korean Regulatory Standards
