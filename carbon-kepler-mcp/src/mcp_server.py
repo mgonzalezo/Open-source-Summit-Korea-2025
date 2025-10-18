@@ -597,8 +597,9 @@ if __name__ == "__main__":
         # Run with SSE transport on port 8000 for Kubernetes
         import uvicorn
         port = int(os.getenv("PORT", "8000"))
-        logger.info("starting_sse_server", port=port)
-        mcp.run(transport="sse")
+        host = os.getenv("HOST", "0.0.0.0")  # Bind to all interfaces for K8s
+        logger.info("starting_sse_server", host=host, port=port)
+        mcp.run(transport="sse", host=host, port=port)
     else:
         # Run with STDIO for local development
         mcp.run()
