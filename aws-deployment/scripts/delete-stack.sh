@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-STACK_NAME="kepler-baremetal-stack"
+STACK_NAME="kepler-k3s-stack"
 REGION="us-east-1"
 PROFILE="${AWS_PROFILE:-default}"
 
