@@ -587,6 +587,18 @@ async def get_workload_metrics_resource(namespace: str, pod_name: str) -> str:
 # ============================================================================
 
 if __name__ == "__main__":
-    # Run MCP server
+    # Run MCP server with SSE transport for Kubernetes deployment
     logger.info("starting_carbon_kepler_mcp_server")
-    mcp.run()
+
+    # Get transport type from environment (default to SSE for K8s)
+    transport = os.getenv("MCP_TRANSPORT", "sse")
+
+    if transport == "sse":
+        # Run with SSE transport on port 8000 for Kubernetes
+        import uvicorn
+        port = int(os.getenv("PORT", "8000"))
+        logger.info("starting_sse_server", port=port)
+        mcp.run(transport="sse")
+    else:
+        # Run with STDIO for local development
+        mcp.run()
