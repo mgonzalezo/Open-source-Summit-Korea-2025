@@ -21,28 +21,107 @@ This MCP server provides tools for assessing Kubernetes workload compliance with
 
 ## Architecture
 
+### Complete System Architecture
+
 ```
-┌─────────────────────────────────────────────────────┐
-│           MCP Server (carbon-mcp namespace)         │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  5 MCP Tools:                                 │  │
-│  │  • assess_workload_compliance                 │  │
-│  │  • compare_optimization_impact                │  │
-│  │  • list_workloads_by_compliance               │  │
-│  │  • get_regional_comparison                    │  │
-│  │  • calculate_optimal_schedule                 │  │
-│  └───────────────────────────────────────────────┘  │
-│                        ↓                             │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  Kepler Client → Prometheus Parser            │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────────┐
-│         Kepler v0.11.2 (kepler-system)              │
-│  https://<IP>:30443/metrics                         │
-└─────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│                      Windows (Demo Machine)                           │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │                     Claude Desktop                              │  │
+│  │  • Natural language queries                                     │  │
+│  │  • MCP client (stdio transport)                                 │  │
+│  └─────────────────────┬───────────────────────────────────────────┘  │
+│                        │ stdio (JSON-RPC over stdin/stdout)           │
+│  ┌─────────────────────▼───────────────────────────────────────────┐  │
+│  │              mcp-sse-bridge.js (Node.js)                        │  │
+│  │  • Translates stdio ↔ SSE                                       │  │
+│  │  • Handles session management                                   │  │
+│  │  • URL encoding for query parameters                            │  │
+│  └─────────────────────┬───────────────────────────────────────────┘  │
+└────────────────────────┼───────────────────────────────────────────────┘
+                         │ HTTP + SSE
+                         │ (Server-Sent Events over port 30800)
+                         │
+┌────────────────────────▼───────────────────────────────────────────────┐
+│                  AWS EC2 (K3s Kubernetes Cluster)                      │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │           MCP Server (carbon-mcp namespace)                     │  │
+│  │  ┌───────────────────────────────────────────────────────────┐  │  │
+│  │  │  FastMCP Framework (SSE Transport)                        │  │  │
+│  │  │  • Exposes: http://0.0.0.0:8000/sse (NodePort 30800)      │  │  │
+│  │  │  • Transport: Server-Sent Events (SSE)                    │  │  │
+│  │  │  • Protocol: JSON-RPC 2.0 over SSE                        │  │  │
+│  │  └───────────────────────────────────────────────────────────┘  │  │
+│  │  ┌───────────────────────────────────────────────────────────┐  │  │
+│  │  │  5 MCP Tools:                                             │  │  │
+│  │  │  • assess_workload_compliance                             │  │  │
+│  │  │  • compare_optimization_impact                            │  │  │
+│  │  │  • list_workloads_by_compliance                           │  │  │
+│  │  │  • get_regional_comparison                                │  │  │
+│  │  │  • calculate_optimal_schedule                             │  │  │
+│  │  └───────────────────────────────────────────────────────────┘  │  │
+│  │                        ↓                                          │  │
+│  │  ┌───────────────────────────────────────────────────────────┐  │  │
+│  │  │  Kepler Client → Prometheus Parser                        │  │  │
+│  │  │  • Fetches: http://kepler.kepler-system:28282/metrics     │  │  │
+│  │  │  • Parses: Prometheus text format                         │  │  │
+│  │  └───────────────────────────────────────────────────────────┘  │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+│                        ↓                                               │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │         Kepler v0.11.2 (kepler-system namespace)                │  │
+│  │  • ClusterIP: http://kepler:28282/metrics (internal)            │  │
+│  │  • NodePort: http://<IP>:30080/metrics (external)               │  │
+│  │  • Metrics: kepler_pod_cpu_watts, kepler_pod_memory_watts       │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
+
+### What is SSE (Server-Sent Events)?
+
+**SSE (Server-Sent Events)** is a standard HTTP-based protocol for real-time server-to-client streaming communication.
+
+**How SSE works:**
+1. Client opens HTTP connection to server endpoint (e.g., `/sse`)
+2. Server keeps connection open and sends events as text:
+   ```
+   event: endpoint
+   data: /messages/?session_id=abc123
+
+   : ping - 1
+
+   data: {"jsonrpc":"2.0","result":{...}}
+   ```
+3. Client receives events in real-time without polling
+
+**Why we use SSE for MCP:**
+- **Unidirectional streaming**: Server can push tool results to client
+- **Standard HTTP**: Works through firewalls, proxies, load balancers
+- **Lightweight**: No WebSocket complexity, just HTTP with persistent connection
+- **Auto-reconnect**: Browser/client automatically reconnects if connection drops
+
+**SSE vs Other Protocols:**
+| Feature | SSE | WebSocket | HTTP Polling |
+|---------|-----|-----------|--------------|
+| Direction | Server → Client | Bidirectional | Client → Server |
+| Protocol | HTTP | TCP | HTTP |
+| Complexity | Low | Medium | Low |
+| Firewall | ✅ Easy | ⚠️ Sometimes blocked | ✅ Easy |
+| Use case | Real-time updates | Chat, games | Simple requests |
+
+**Our Implementation:**
+```
+Windows (Claude Desktop)
+    ↓ stdio (JSON-RPC)
+Bridge (mcp-sse-bridge.js)
+    ↓ HTTP POST (send requests)
+    ↑ SSE stream (receive responses)
+MCP Server (FastMCP on K8s)
+```
+
+The bridge translates between:
+- **Inbound**: stdin → HTTP POST to `/messages/?session_id=...`
+- **Outbound**: SSE stream → stdout (JSON-RPC messages)
 
 ## Quick Start
 
@@ -235,7 +314,54 @@ pytest tests/
 
 ## Claude Desktop Integration
 
-Add to Claude Desktop MCP settings (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+### Remote SSE Connection (Recommended for Kubernetes Deployment)
+
+When the MCP server is deployed on Kubernetes, use the SSE bridge to connect Claude Desktop to the remote server.
+
+**Windows Configuration** (`%APPDATA%\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "kepler-carbon-mcp": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\YourUsername\\mcp-sse-bridge.js",
+        "http://YOUR_SERVER_IP:30800/sse"
+      ]
+    }
+  }
+}
+```
+
+**macOS/Linux Configuration** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "kepler-carbon-mcp": {
+      "command": "node",
+      "args": [
+        "/path/to/mcp-sse-bridge.js",
+        "http://YOUR_SERVER_IP:30800/sse"
+      ]
+    }
+  }
+}
+```
+
+**Bridge Script Setup:**
+
+1. Copy `mcp-sse-bridge.js` from this repository
+2. Place it in your home directory or any accessible location
+3. Update the path in the config above
+4. Ensure Node.js is installed (`node --version` should show v18+)
+
+**Important**: The bridge script includes critical URL encoding fixes for session endpoints. Use the version from this repository, not a generic SSE client.
+
+### Local Development (stdio)
+
+For local development, run the MCP server directly:
 
 ```json
 {
@@ -244,7 +370,7 @@ Add to Claude Desktop MCP settings (`~/Library/Application Support/Claude/claude
       "command": "python",
       "args": ["-m", "src.mcp_server"],
       "env": {
-        "KEPLER_ENDPOINT": "https://YOUR_IP:30443/metrics",
+        "KEPLER_ENDPOINT": "http://YOUR_IP:28282/metrics",
         "KOREA_CARBON_INTENSITY": "424",
         "KOREA_PUE_TARGET": "1.4"
       }
@@ -253,9 +379,49 @@ Add to Claude Desktop MCP settings (`~/Library/Application Support/Claude/claude
 }
 ```
 
-Then ask Claude:
+### Example Queries
 
-> "Check if my ml-training-job workload complies with Korean carbon neutrality standards"
+Once connected, ask Claude Desktop:
+
+```
+1. "List all Kubernetes workloads and check their compliance with Korean environmental regulations"
+
+2. "Which pods in my cluster are consuming the most power?"
+
+3. "Check if the ml-training-job in the ai-team namespace complies with Korean carbon neutrality standards"
+
+4. "Show me the top 5 power-consuming workloads and suggest optimizations"
+
+5. "Compare the carbon impact of running my batch-job in Seoul vs Tokyo"
+```
+
+### Troubleshooting Connection
+
+**Test the bridge manually:**
+
+```bash
+# Windows PowerShell
+node C:\Users\YourUsername\mcp-sse-bridge.js http://YOUR_SERVER_IP:30800/sse
+
+# macOS/Linux
+node /path/to/mcp-sse-bridge.js http://YOUR_SERVER_IP:30800/sse
+```
+
+**Expected output:**
+```
+[MCP Bridge] Starting bridge to http://YOUR_SERVER_IP:30800/sse
+[MCP Bridge] Connected to SSE server
+[MCP Bridge] Session endpoint: /messages/?session_id=...
+[MCP Bridge] POST response (202): Accepted
+```
+
+**If you see errors**, check:
+
+- Server is accessible: `curl http://YOUR_SERVER_IP:30800/sse`
+- Bridge script is the correct version (should have URL encoding fix)
+- Node.js version is 18+ (`node --version`)
+
+For detailed setup instructions, see [CLAUDE_DESKTOP_WINDOWS_SETUP.md](../CLAUDE_DESKTOP_WINDOWS_SETUP.md)
 
 ## Project Structure
 

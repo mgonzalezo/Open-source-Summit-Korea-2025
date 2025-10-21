@@ -26,7 +26,7 @@ spec:
           protocol: TCP
         env:
         - name: KEPLER_ENDPOINT
-          value: "https://kepler-https-proxy.kepler-system.svc.cluster.local:443/metrics"
+          value: "http://kepler.kepler-system.svc.cluster.local:28282/metrics"
         - name: KOREA_CARBON_INTENSITY
           value: "424"
         - name: KOREA_PUE_TARGET

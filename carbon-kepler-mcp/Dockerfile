@@ -11,7 +11,7 @@ COPY src/ ./src/
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV KEPLER_ENDPOINT=https://localhost:30443/metrics
+ENV KEPLER_ENDPOINT=http://kepler.kepler-system.svc.cluster.local:28282/metrics
 ENV KOREA_CARBON_INTENSITY=424
 ENV KOREA_PUE_TARGET=1.4
 
