@@ -2,6 +2,49 @@
 
 This directory contains scripts to test and demonstrate power compliance violations for Open Source Summit Korea 2025.
 
+## Quick Test (Run This First!)
+
+**Verify workloads are running and check their power consumption:**
+
+```bash
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c \"
+from src.kepler_client import KeplerClient
+
+client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
+pods = client.list_pods(namespace='demo-workloads')
+
+print(f'Found {len(pods)} pods in demo-workloads namespace\\n')
+print('Pod Power Consumption:')
+print('-' * 60)
+
+pod_power = []
+for pod_info in pods:
+    pod_name = pod_info['pod']
+    namespace = pod_info['namespace']
+    metrics = client.get_pod_metrics(pod_name, namespace)
+    cpu_watts = metrics.get('cpu_watts', 0.0)
+    pod_power.append((namespace, pod_name, cpu_watts))
+
+for namespace, pod_name, cpu_watts in sorted(pod_power, key=lambda x: x[2], reverse=True):
+    print(f'{namespace}/{pod_name}: {cpu_watts:.9f} W')
+\" 2>&1 | grep -v '^\[' | grep -v '^2025'"
+```
+
+**Expected Output:**
+
+```text
+Found 10 pods in demo-workloads namespace
+
+Pod Power Consumption:
+------------------------------------------------------------
+demo-workloads/high-power-cpu-burner-789756c966-fvnzr: 0.000000621 W
+demo-workloads/high-power-cpu-burner-789756c966-x7rnr: 0.000000616 W
+demo-workloads/high-power-cpu-burner-789756c966-982lg: 0.000000614 W
+... (10 pods total)
+```
+
+---
+
 ## Quick Reference
 
 ### 1. Real Workload Deployment (Requires 15+ minutes for metrics)
@@ -10,23 +53,39 @@ Deploy actual high-power Kubernetes workloads:
 
 ```bash
 # Deploy workloads
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl apply -f ~/carbon-kepler-mcp/test-workloads/high-power-app.yaml"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl apply -f ~/carbon-kepler-mcp/test-workloads/high-power-app.yaml"
 
 # Verify deployment
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl get pods -n demo-workloads -n production"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl get pods -n demo-workloads -n production"
 
 # Check CPU consumption (should show >10 CPUs total)
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl top pods -n demo-workloads -n production"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl top pods -n demo-workloads -n production"
 
 # WAIT 15 minutes for Kepler to accumulate energy metrics
 # Then check power metrics
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c '
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c \"
 from src.kepler_client import KeplerClient
-client = KeplerClient(\"http://kepler.kepler-system.svc.cluster.local:28282/metrics\")
-pods = client.list_pods()
-for pod in sorted(pods, key=lambda x: x.get(\"cpu_watts\", 0), reverse=True)[:10]:
-    print(f\"{pod[\"namespace\"]}/{pod[\"pod\"]}: {pod.get(\"cpu_watts\", 0):.6f}W\")
-'"
+
+client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
+pods = client.list_pods(namespace='demo-workloads')
+
+print(f'Found {len(pods)} pods in demo-workloads namespace\\n')
+print('Pod Power Consumption:')
+print('-' * 60)
+
+# Collect power data for sorting
+pod_power = []
+for pod_info in pods:
+    pod_name = pod_info['pod']
+    namespace = pod_info['namespace']
+    metrics = client.get_pod_metrics(pod_name, namespace)
+    cpu_watts = metrics.get('cpu_watts', 0.0)
+    pod_power.append((namespace, pod_name, cpu_watts))
+
+# Sort by power (highest first) and display
+for namespace, pod_name, cpu_watts in sorted(pod_power, key=lambda x: x[2], reverse=True):
+    print(f'{namespace}/{pod_name}: {cpu_watts:.9f} W')
+\" 2>&1 | grep -v '^\[' | grep -v '^2025'"
 ```
 
 **Limitation**: Kepler calculates power from energy counter deltas, so new workloads show 0W initially.
@@ -42,7 +101,7 @@ Use mock high-power values to demonstrate compliance violations immediately.
 This shows that workloads consuming 15-22W are technically COMPLIANT with current Korean grid standards (424 gCO2/kWh), but still trigger preventive action alerts due to high power consumption.
 
 ```bash
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "
   sudo kubectl cp ~/carbon-kepler-mcp/test-workloads/simulate-non-compliant.py carbon-mcp/\$(sudo kubectl get pod -n carbon-mcp -l app=carbon-mcp-server -o jsonpath='{.items[0].metadata.name}'):/tmp/simulate.py && \
   sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 /tmp/simulate.py
 "
@@ -71,7 +130,7 @@ Action 1: ALERT [HIGH PRIORITY]
 This demonstrates a stricter compliance regime where cloud providers must achieve 30% better efficiency than grid average (300 gCO2/kWh target instead of 424).
 
 ```bash
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "
   sudo kubectl cp ~/carbon-kepler-mcp/test-workloads/demo-non-compliant.py carbon-mcp/\$(sudo kubectl get pod -n carbon-mcp -l app=carbon-mcp-server -o jsonpath='{.items[0].metadata.name}'):/tmp/demo.py && \
   sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 /tmp/demo.py
 "
@@ -186,10 +245,10 @@ For a fleet of 100 such workloads: **1,038 metric tons CO2/month**
 
 ```bash
 # Delete demo workloads
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl delete -f ~/carbon-kepler-mcp/test-workloads/high-power-app.yaml"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl delete -f ~/carbon-kepler-mcp/test-workloads/high-power-app.yaml"
 
 # Verify deletion
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl get pods -n demo-workloads -n production"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl get pods -n demo-workloads -n production"
 ```
 
 ---
@@ -205,8 +264,8 @@ ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl get pods -n demo-workloa
 **Issue**: No pods found in demo-workloads namespace
 **Fix**: Check if namespace exists and workloads are deployed:
 ```bash
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl get ns"
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl get pods -A | grep demo"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl get ns"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl get pods -A | grep demo"
 ```
 
 ---
