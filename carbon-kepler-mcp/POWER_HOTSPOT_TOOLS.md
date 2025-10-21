@@ -264,7 +264,7 @@ The `identify_power_hotspots` tool recommends four types of preventive actions:
 
 ```bash
 # SSH to your AWS instance
-ssh -i oss-korea.pem ubuntu@52.91.152.207
+ssh -i oss-korea.pem ubuntu@57.182.90.243
 
 # Create test script
 cat > ~/test_hotspot_tools.py << 'EOF'

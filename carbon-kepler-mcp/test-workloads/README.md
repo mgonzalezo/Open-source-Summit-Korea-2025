@@ -42,7 +42,7 @@
 
 ```bash
 # SSH to your instance
-ssh -i oss-korea.pem ubuntu@52.91.152.207
+ssh -i oss-korea.pem ubuntu@57.182.90.243
 
 # Deploy all test workloads
 sudo kubectl apply -f ~/carbon-kepler-mcp/test-workloads/high-power-app.yaml

@@ -280,8 +280,8 @@ cd aws-deployment && ./scripts/stop-instance.sh
 
 Verify stopped:
 ```bash
-aws ec2 describe-instances --profile mgonzalezo --region us-east-1 \
-  --instance-ids i-01d31a7c7323ef2f1 \
+aws ec2 describe-instances --profile mgonzalezo --region ap-northeast-1 \
+  --instance-ids i-013b5cd6ee511f107 \
   --query 'Reservations[0].Instances[0].State.Name'
 ```
 
@@ -297,7 +297,7 @@ Expected: `"stopped"`
 **Issue**: Pods not ready
 **Quick Check**:
 ```bash
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl get pods -A | grep -v Running"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl get pods -A | grep -v Running"
 ```
 If anything not Running, switch to backup slides
 
@@ -305,7 +305,7 @@ If anything not Running, switch to backup slides
 **Quick Recovery**:
 ```bash
 # Show the simpler version
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c 'from src.kepler_client import KeplerClient; c = KeplerClient(\"http://kepler.kepler-system.svc.cluster.local:28282/metrics\"); print(f\"Total pods with metrics: {len(c.list_pods())}\")'"
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c 'from src.kepler_client import KeplerClient; c = KeplerClient(\"http://kepler.kepler-system.svc.cluster.local:28282/metrics\"); print(f\"Total pods with metrics: {len(c.list_pods())}\")'"
 ```
 Then switch to backup slides
 

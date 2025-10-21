@@ -16,8 +16,8 @@ cd /home/margonza/Documents/Marco/talks/Open-Source-Summit-Korea-2025/Open-sourc
 cd aws-deployment
 ./scripts/start-instance.sh
 
-# 3. Set instance IP (should be 52.91.152.207)
-export INSTANCE_IP=52.91.152.207
+# 3. Set instance IP (should be 57.182.90.243)
+export INSTANCE_IP=57.182.90.243
 
 # 4. Wait for K3s to be ready (~3 minutes after start)
 ssh -i ../oss-korea.pem ubuntu@$INSTANCE_IP "sudo kubectl get pods -A"

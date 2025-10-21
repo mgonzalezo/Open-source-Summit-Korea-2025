@@ -48,7 +48,7 @@ cd aws-deployment
 
 **Expected output**:
 ```
-Starting instance i-01d31a7c7323ef2f1...
+Starting instance i-013b5cd6ee511f107...
 {
     "StartingInstances": [
         {
@@ -56,7 +56,7 @@ Starting instance i-01d31a7c7323ef2f1...
                 "Code": 0,
                 "Name": "pending"
             },
-            "InstanceId": "i-01d31a7c7323ef2f1",
+            "InstanceId": "i-013b5cd6ee511f107",
             ...
         }
     ]
