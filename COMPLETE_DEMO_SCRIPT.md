@@ -255,32 +255,31 @@ INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 > "Perfect! The MCP server is running on port 8000 using SSE (Server-Sent Events)
 > transport. This is exactly what Claude Desktop expects for the MCP protocol."
 
-**Test the health endpoint**:
+**Test the MCP server endpoint**:
 ```bash
-# From inside the instance
-curl -s http://localhost:8000/health | python3 -m json.tool
+# Check that SSE endpoint is responding (MCP uses Server-Sent Events)
+curl -s -m 2 http://localhost:30800/sse 2>&1 | head -1
+# If it hangs, that's good - it means SSE is waiting for events
+# Press Ctrl+C to exit
+
+# Better verification - check pod logs for startup confirmation
+sudo kubectl logs -n carbon-mcp -l app=carbon-mcp-server --tail=5
 ```
 
 **Expected output**:
-```json
-{
-    "status": "healthy",
-    "server": "carbon-kepler-mcp",
-    "version": "1.0.0",
-    "tools": 8,
-    "kepler_connected": true,
-    "korean_compliance_enabled": true
-}
+
+```text
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
 ```
 
 **What to say**:
-> "Excellent! The health check shows:
-> - Server is healthy
-> - 8 MCP tools are available
-> - Kepler connectivity is working
-> - Korean compliance assessment is enabled
->
-> These 8 tools are what Claude will use to analyze power consumption."
+> "Perfect! The MCP server logs show it's running successfully on port 8000 inside
+> the container, exposed via NodePort 30800. The SSE transport is ready to accept
+> connections from Claude Desktop. The server provides 8 specialized tools for
+> analyzing Kepler power metrics and Korean regulatory compliance."
 
 **Exit SSH**:
 ```bash
@@ -293,29 +292,32 @@ exit  # Return to your laptop
 
 **Script to say**:
 > "The MCP server needs to be accessible from the internet so Claude Desktop
-> can connect to it. Let's verify port 8000 is open."
+> can connect to it. Let's verify port 30800 is open and the SSE endpoint responds."
 
 **Commands** (from your laptop):
 ```bash
-# Test from your laptop (not SSH)
-curl -v http://52.91.152.207:8000/health
+# Test from your laptop (not SSH) - replace with your actual instance IP
+curl -v -m 3 http://57.182.90.243:30800/sse
 ```
 
 **Expected output**:
-```
-* Connected to 52.91.152.207 (52.91.152.207) port 8000
-> GET /health HTTP/1.1
-> Host: 52.91.152.207:8000
+
+```text
+* Connected to 57.182.90.243 (57.182.90.243) port 30800
+> GET /sse HTTP/1.1
+> Host: 57.182.90.243:30800
 >
 < HTTP/1.1 200 OK
-< content-type: application/json
-<
-{"status":"healthy","tools":8,"kepler_connected":true}
+< content-type: text/event-stream
+< transfer-encoding: chunked
 ```
 
+(The connection will hang here - press Ctrl+C - this is expected for SSE)
+
 **What to say**:
-> "Perfect! We can reach the MCP server from the internet. If this failed, it
-> would mean the AWS security group isn't allowing port 8000 traffic, and
+> "Perfect! We can reach the MCP server from the internet on port 30800. The SSE
+> endpoint is responding correctly with 'text/event-stream' content type. If this
+> failed, it would mean the AWS security group isn't configured properly, and
 > Claude Desktop wouldn't be able to connect."
 
 **If it fails**, troubleshoot:
