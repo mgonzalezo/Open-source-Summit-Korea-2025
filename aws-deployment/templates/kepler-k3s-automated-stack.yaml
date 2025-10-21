@@ -91,6 +91,11 @@ Resources:
           CidrIp: 0.0.0.0/0
           Description: Kepler HTTPS Metrics (NodePort)
         - IpProtocol: tcp
+          FromPort: 30800
+          ToPort: 30800
+          CidrIp: 0.0.0.0/0
+          Description: MCP Server (SSE)
+        - IpProtocol: tcp
           FromPort: 28282
           ToPort: 28282
           CidrIp: !Ref SSHLocation
