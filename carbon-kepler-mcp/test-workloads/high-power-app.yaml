@@ -1,0 +1,245 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-workloads
+  labels:
+    purpose: oss-korea-2025-demo
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: high-power-cpu-burner
+  namespace: demo-workloads
+  labels:
+    app: cpu-burner
+    demo: high-power
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cpu-burner
+  template:
+    metadata:
+      labels:
+        app: cpu-burner
+        demo: high-power
+    spec:
+      containers:
+      - name: stress-cpu
+        image: containerstack/alpine-stress:latest
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "256Mi"
+          limits:
+            cpu: "2000m"
+            memory: "512Mi"
+        command: ["stress"]
+        args:
+          - "--cpu"
+          - "4"          # Use 4 CPU workers
+          - "--timeout"
+          - "3600"       # Run for 1 hour
+          - "--verbose"
+        env:
+        - name: WORKLOAD_TYPE
+          value: "cpu-intensive"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-intensive-app
+  namespace: demo-workloads
+  labels:
+    app: memory-app
+    demo: high-memory
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: memory-app
+  template:
+    metadata:
+      labels:
+        app: memory-app
+        demo: high-memory
+    spec:
+      containers:
+      - name: stress-memory
+        image: containerstack/alpine-stress:latest
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
+        command: ["stress"]
+        args:
+          - "--vm"
+          - "2"          # 2 memory workers
+          - "--vm-bytes"
+          - "256M"       # Each allocates 256MB
+          - "--timeout"
+          - "3600"
+          - "--verbose"
+        env:
+        - name: WORKLOAD_TYPE
+          value: "memory-intensive"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inefficient-fibonacci
+  namespace: demo-workloads
+  labels:
+    app: fibonacci
+    demo: inefficient-code
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fibonacci
+  template:
+    metadata:
+      labels:
+        app: fibonacci
+        demo: inefficient-code
+    spec:
+      containers:
+      - name: python-inefficient
+        image: python:3.11-slim
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "128Mi"
+          limits:
+            cpu: "1500m"
+            memory: "256Mi"
+        command: ["python3", "-c"]
+        args:
+        - |
+          # Deliberately inefficient Fibonacci calculation (no memoization)
+          import time
+
+          def inefficient_fibonacci(n):
+              if n <= 1:
+                  return n
+              return inefficient_fibonacci(n-1) + inefficient_fibonacci(n-2)
+
+          print("Starting inefficient CPU-intensive Fibonacci calculations...")
+          while True:
+              # Calculate Fibonacci of 35 repeatedly (very CPU intensive)
+              result = inefficient_fibonacci(35)
+              print(f"Fibonacci(35) = {result}")
+              time.sleep(1)  # Brief pause between calculations
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crypto-miner-simulation
+  namespace: demo-workloads
+  labels:
+    app: crypto-sim
+    demo: extreme-power
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crypto-sim
+  template:
+    metadata:
+      labels:
+        app: crypto-sim
+        demo: extreme-power
+    spec:
+      containers:
+      - name: cpu-intensive-hash
+        image: python:3.11-slim
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "256Mi"
+          limits:
+            cpu: "4000m"
+            memory: "512Mi"
+        command: ["python3", "-c"]
+        args:
+        - |
+          # Simulate cryptocurrency mining workload (CPU-intensive hashing)
+          import hashlib
+          import time
+
+          print("Simulating crypto mining workload (high CPU usage)...")
+          nonce = 0
+          target = "0000"
+
+          while True:
+              data = f"block_data_{nonce}".encode()
+              hash_result = hashlib.sha256(data).hexdigest()
+
+              if hash_result.startswith(target):
+                  print(f"Found hash: {hash_result} (nonce: {nonce})")
+                  target = "00000"  # Make it harder
+
+              nonce += 1
+
+              # Print progress every 100000 attempts
+              if nonce % 100000 == 0:
+                  print(f"Attempts: {nonce}, Current hash: {hash_result[:20]}...")
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: over-provisioned-idle
+  namespace: demo-workloads
+  labels:
+    app: idle-wasteful
+    demo: over-provisioned
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: idle-wasteful
+  template:
+    metadata:
+      labels:
+        app: idle-wasteful
+        demo: over-provisioned
+    spec:
+      containers:
+      - name: over-provisioned
+        image: busybox:latest
+        resources:
+          requests:
+            cpu: "2000m"      # Requesting 2 CPUs
+            memory: "1Gi"     # Requesting 1GB RAM
+          limits:
+            cpu: "4000m"      # Limit 4 CPUs
+            memory: "2Gi"     # Limit 2GB RAM
+        command: ["sh", "-c"]
+        args:
+        - |
+          # This container requests a lot but does almost nothing
+          # Perfect example of inefficiency and resource waste
+          echo "Over-provisioned container started..."
+          echo "Requested: 2 CPUs, 1GB RAM"
+          echo "Actual usage: ~0.001 CPU, ~10MB RAM"
+          echo "This is wasteful and inefficient!"
+
+          while true; do
+            sleep 300  # Sleep for 5 minutes
+            echo "Still idle but hogging resources..."
+          done

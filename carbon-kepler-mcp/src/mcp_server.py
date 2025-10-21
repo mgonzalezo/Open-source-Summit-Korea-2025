@@ -24,6 +24,7 @@ from .compliance_standards import (
     REGIONAL_CARBON_INTENSITY,
     get_regional_carbon_intensity
 )
+from .power_hotspot_tools import PowerHotspotDetector, PowerConsumer, PreventiveAction
 
 # Configure logging
 structlog.configure(
@@ -54,6 +55,13 @@ KOREA_PUE_TARGET = float(os.getenv(
 ))
 
 kepler_client = KeplerClient(endpoint=KEPLER_ENDPOINT)
+
+# Initialize power hotspot detector (inspired by Kepler PR #2250)
+hotspot_detector = PowerHotspotDetector(
+    kepler_client=kepler_client,
+    carbon_intensity_gco2_kwh=KOREA_CARBON_INTENSITY,
+    pue_target=KOREA_PUE_TARGET
+)
 
 logger.info(
     "mcp_server_initialized",
@@ -104,11 +112,12 @@ async def assess_workload_compliance(
         node_metrics = kepler_client.get_node_metrics()
 
         # Create workload metrics object
+        # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics at pod level
         workload_metrics = WorkloadMetrics(
-            cpu_watts=pod_metrics["cpu_watts"],
-            memory_watts=pod_metrics["memory_watts"],
-            gpu_watts=pod_metrics["gpu_watts"],
-            other_watts=pod_metrics["other_watts"]
+            cpu_watts=pod_metrics.get("cpu_watts", 0.0),
+            memory_watts=0.0,  # Not available in Kepler v0.11.2 at pod level
+            gpu_watts=0.0,     # Not available in Kepler v0.11.2 at pod level
+            other_watts=0.0    # Not available in Kepler v0.11.2 at pod level
         )
 
         # Get regional carbon intensity
@@ -119,12 +128,13 @@ async def assess_workload_compliance(
             grid_intensity = KOREA_CARBON_INTENSITY
 
         # Assess compliance
+        # Note: Using CPU watts only since memory/GPU not available at pod level in Kepler v0.11.2
         assessment = assess_korea_compliance(
             workload_name=workload_name,
             namespace=namespace,
             region=region,
             workload_metrics=workload_metrics,
-            node_total_power_watts=node_metrics["cpu_watts"] + node_metrics["memory_watts"],
+            node_total_power_watts=node_metrics.get("cpu_watts", 0.0),
             grid_carbon_intensity_gco2_kwh=grid_intensity
         )
 
@@ -372,11 +382,8 @@ async def get_regional_comparison(
 
     # Get workload metrics
     pod_metrics = kepler_client.get_pod_metrics(workload_name, namespace)
-    power_watts = (
-        pod_metrics["cpu_watts"] +
-        pod_metrics["memory_watts"] +
-        pod_metrics["gpu_watts"]
-    )
+    # Note: Kepler v0.11.2 only provides CPU watts at pod level
+    power_watts = pod_metrics.get("cpu_watts", 0.0)
 
     from .carbon_calculator import calculate_carbon_emissions
 
@@ -458,11 +465,8 @@ async def calculate_optimal_schedule(
 
     # Get workload power
     pod_metrics = kepler_client.get_pod_metrics(workload_name, namespace)
-    power_watts = (
-        pod_metrics["cpu_watts"] +
-        pod_metrics["memory_watts"] +
-        pod_metrics["gpu_watts"]
-    )
+    # Note: Kepler v0.11.2 only provides CPU watts at pod level
+    power_watts = pod_metrics.get("cpu_watts", 0.0)
 
     # Simplified hourly carbon intensity profile for Korea (ap-northeast-2)
     # In production, this should come from Carbon Aware SDK
@@ -507,6 +511,218 @@ async def calculate_optimal_schedule(
             "Consider using Kubernetes CronJob for automated scheduling."
         )
     }
+
+
+# ============================================================================
+# POWER HOTSPOT DETECTION TOOLS (Inspired by Kepler PR #2250)
+# ============================================================================
+
+@mcp.tool()
+async def identify_power_hotspots(
+    namespace: Optional[str] = None,
+    power_threshold_watts: float = 1.0,
+    include_compliance_check: bool = True
+) -> Dict:
+    """
+    Identify which containers/pods are consuming the most power and recommend preventive actions.
+
+    This tool answers: "Which nodes or containers are consuming the most power and
+    what preventive actions should we take?"
+
+    Inspired by Kepler PR #2250's list_top_consumers, enhanced with Korean compliance
+    standards and carbon-aware preventive action recommendations.
+
+    Args:
+        namespace: Kubernetes namespace to analyze (None for all namespaces)
+        power_threshold_watts: Minimum power consumption to be considered a hotspot
+        include_compliance_check: Flag non-compliant workloads as hotspots
+
+    Returns:
+        Dictionary containing:
+        - hotspots: List of high power consumers
+        - preventive_actions: Recommended actions sorted by priority
+        - summary: Overall statistics
+    """
+    logger.info(
+        "identifying_power_hotspots",
+        namespace=namespace,
+        threshold=power_threshold_watts
+    )
+
+    try:
+        # Identify hotspots and generate actions
+        hotspots, actions = hotspot_detector.identify_power_hotspots(
+            namespace=namespace,
+            power_threshold_watts=power_threshold_watts,
+            compliance_check=include_compliance_check
+        )
+
+        # Convert to serializable format
+        hotspot_list = [
+            {
+                "rank": h.rank,
+                "name": h.name,
+                "namespace": h.namespace,
+                "power_watts": h.power_watts,
+                "carbon_compliant": h.carbon_compliant,
+                "pue_compliant": h.pue_compliant,
+                "monthly_emissions_kg": h.monthly_emissions_kg,
+                "efficiency_score": h.power_efficiency_score
+            }
+            for h in hotspots
+        ]
+
+        action_list = [
+            {
+                "action_type": a.action_type,
+                "priority": a.priority,
+                "resource": a.resource,
+                "reason": a.reason,
+                "estimated_savings_watts": a.estimated_savings_watts,
+                "estimated_co2_reduction_kg_month": a.estimated_co2_reduction_kg_month,
+                "implementation_steps": a.implementation_steps
+            }
+            for a in actions
+        ]
+
+        # Calculate summary statistics
+        total_power = sum(h.power_watts for h in hotspots)
+        total_potential_savings = sum(a.estimated_savings_watts for a in actions)
+        total_co2_reduction = sum(a.estimated_co2_reduction_kg_month for a in actions)
+
+        response = {
+            "namespace": namespace or "all",
+            "threshold_watts": power_threshold_watts,
+            "summary": {
+                "total_hotspots": len(hotspots),
+                "total_power_watts": total_power,
+                "total_preventive_actions": len(actions),
+                "high_priority_actions": len([a for a in actions if a.priority == "high"]),
+                "potential_power_savings_watts": total_potential_savings,
+                "potential_co2_reduction_kg_month": total_co2_reduction
+            },
+            "hotspots": hotspot_list,
+            "preventive_actions": action_list[:10],  # Top 10 actions
+            "recommendation": _generate_hotspot_recommendation(hotspots, actions)
+        }
+
+        logger.info(
+            "power_hotspots_identified",
+            total_hotspots=len(hotspots),
+            total_actions=len(actions)
+        )
+
+        return response
+
+    except Exception as e:
+        logger.error("hotspot_identification_failed", error=str(e))
+        raise
+
+
+def _generate_hotspot_recommendation(hotspots, actions):
+    """Generate human-readable recommendation"""
+    if not hotspots:
+        return "✅ No power hotspots detected. All workloads are within acceptable limits."
+
+    high_priority = len([a for a in actions if a.priority == "high"])
+
+    if high_priority > 0:
+        return (
+            f"⚠️  URGENT: {len(hotspots)} power hotspot(s) detected with {high_priority} "
+            f"high-priority action(s) required. Immediate attention recommended to prevent "
+            f"compliance violations and reduce carbon emissions."
+        )
+    else:
+        return (
+            f"⚡ {len(hotspots)} power hotspot(s) detected. Consider implementing the "
+            f"recommended preventive actions to improve efficiency and reduce emissions."
+        )
+
+
+@mcp.tool()
+async def list_top_power_consumers(
+    namespace: Optional[str] = None,
+    limit: int = 10,
+    sort_by: str = "power"
+) -> Dict:
+    """
+    List top power-consuming workloads in the cluster.
+
+    Similar to Kepler PR #2250's list_top_consumers tool, enhanced with
+    Korean compliance metrics.
+
+    Args:
+        namespace: Filter by namespace (None for all)
+        limit: Maximum number of results (default: 10)
+        sort_by: Sort by "power" (highest first) or "efficiency" (lowest efficiency first)
+
+    Returns:
+        Ranked list of power consumers with compliance status
+    """
+    logger.info("listing_top_power_consumers", namespace=namespace, limit=limit)
+
+    try:
+        consumers = hotspot_detector.list_top_power_consumers(
+            namespace=namespace,
+            limit=limit,
+            sort_by=sort_by
+        )
+
+        consumer_list = [
+            {
+                "rank": c.rank,
+                "name": c.name,
+                "namespace": c.namespace,
+                "power_watts": c.power_watts,
+                "status": "COMPLIANT" if (c.carbon_compliant and c.pue_compliant) else "NON_COMPLIANT",
+                "carbon_compliant": c.carbon_compliant,
+                "pue_compliant": c.pue_compliant,
+                "monthly_emissions_kg": c.monthly_emissions_kg,
+                "efficiency_score": c.power_efficiency_score
+            }
+            for c in consumers
+        ]
+
+        # Get summary
+        summary = hotspot_detector.get_power_consumption_summary(namespace)
+
+        return {
+            "namespace": namespace or "all",
+            "sort_by": sort_by,
+            "limit": limit,
+            "summary": summary,
+            "consumers": consumer_list
+        }
+
+    except Exception as e:
+        logger.error("failed_to_list_consumers", error=str(e))
+        raise
+
+
+@mcp.tool()
+async def get_power_consumption_summary(
+    namespace: Optional[str] = None
+) -> Dict:
+    """
+    Get overall power consumption summary for a namespace or entire cluster.
+
+    Provides a quick overview of power usage, compliance, and top consumers.
+
+    Args:
+        namespace: Target namespace (None for cluster-wide)
+
+    Returns:
+        Summary statistics including total power, top consumers, compliance rate
+    """
+    logger.info("getting_power_summary", namespace=namespace)
+
+    try:
+        summary = hotspot_detector.get_power_consumption_summary(namespace)
+        return summary
+
+    except Exception as e:
+        logger.error("failed_to_get_summary", error=str(e))
+        raise
 
 
 # ============================================================================
@@ -555,23 +771,17 @@ async def get_workload_metrics_resource(namespace: str, pod_name: str) -> str:
 
     try:
         metrics = kepler_client.get_pod_metrics(pod_name, namespace)
-        total_watts = (
-            metrics["cpu_watts"] +
-            metrics["memory_watts"] +
-            metrics["gpu_watts"] +
-            metrics["other_watts"]
-        )
+        # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics at pod level
+        total_watts = metrics.get("cpu_watts", 0.0)
 
         result = {
             "namespace": namespace,
             "pod": pod_name,
             "metrics": {
-                "cpu_watts": metrics["cpu_watts"],
-                "memory_watts": metrics["memory_watts"],
-                "gpu_watts": metrics["gpu_watts"],
-                "other_watts": metrics["other_watts"],
+                "cpu_watts": metrics.get("cpu_watts", 0.0),
+                "cpu_joules_total": metrics.get("cpu_joules_total", 0.0),
                 "total_watts": total_watts,
-                "joules_total": metrics["joules_total"]
+                "note": "Only CPU metrics available at pod level in Kepler v0.11.2"
             },
             "collection_method": "ebpf"
         }

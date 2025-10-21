@@ -145,14 +145,14 @@ class KeplerClient:
         """
         metrics = self.fetch_metrics()
 
-        labels = {"pod": pod_name, "namespace": namespace}
+        # Kepler v0.11.2 uses pod_name and pod_namespace labels
+        labels = {"pod_name": pod_name, "pod_namespace": namespace}
 
         return {
             "cpu_watts": get_metric_value(metrics, "kepler_pod_cpu_watts", labels),
-            "memory_watts": get_metric_value(metrics, "kepler_pod_memory_watts", labels),
-            "gpu_watts": get_metric_value(metrics, "kepler_pod_gpu_watts", labels),
-            "other_watts": get_metric_value(metrics, "kepler_pod_other_watts", labels),
-            "joules_total": get_metric_value(metrics, "kepler_pod_joules_total", labels),
+            "cpu_joules_total": get_metric_value(metrics, "kepler_pod_cpu_joules_total", labels),
+            # Note: Kepler v0.11.2 only exposes CPU metrics at pod level
+            # Memory, GPU, and other metrics are only available at container level
         }
 
     def get_namespace_metrics(self, namespace: str = "default") -> Dict[str, float]:
@@ -167,20 +167,16 @@ class KeplerClient:
         """
         metrics = self.fetch_metrics()
 
-        labels = {"namespace": namespace}
+        # Kepler v0.11.2 uses pod_namespace label
+        labels = {"pod_namespace": namespace}
 
         return {
             "total_cpu_watts": aggregate_metrics(
                 metrics, "kepler_pod_cpu_watts", labels, "sum"
             ),
-            "total_memory_watts": aggregate_metrics(
-                metrics, "kepler_pod_memory_watts", labels, "sum"
-            ),
-            "total_gpu_watts": aggregate_metrics(
-                metrics, "kepler_pod_gpu_watts", labels, "sum"
-            ),
+            # Note: Only CPU metrics available at pod level in Kepler v0.11.2
             "pod_count": len(
-                set(m.labels.get("pod", "") for m in filter_metrics(metrics, labels=labels))
+                set(m.labels.get("pod_name", "") for m in filter_metrics(metrics, labels=labels))
             ),
         }
 
@@ -195,10 +191,12 @@ class KeplerClient:
 
         return {
             "cpu_watts": get_metric_value(metrics, "kepler_node_cpu_watts"),
-            "memory_watts": get_metric_value(metrics, "kepler_node_memory_watts"),
-            "gpu_watts": get_metric_value(metrics, "kepler_node_gpu_watts"),
+            "cpu_active_watts": get_metric_value(metrics, "kepler_node_cpu_active_watts"),
+            "cpu_idle_watts": get_metric_value(metrics, "kepler_node_cpu_idle_watts"),
             "cpu_usage_ratio": get_metric_value(metrics, "kepler_node_cpu_usage_ratio"),
-            "joules_total": get_metric_value(metrics, "kepler_node_joules_total"),
+            "cpu_joules_total": get_metric_value(metrics, "kepler_node_cpu_joules_total"),
+            # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics
+            # Memory and GPU metrics require hardware support (RAPL, NVIDIA, etc.)
         }
 
     def list_pods(self, namespace: Optional[str] = None) -> List[Dict[str, str]]:
@@ -214,11 +212,12 @@ class KeplerClient:
         metrics = self.fetch_metrics()
 
         # Extract unique pod/namespace combinations
+        # Kepler v0.11.2 uses pod_name and pod_namespace labels
         pods = set()
         for metric in metrics:
-            if "pod" in metric.labels and "namespace" in metric.labels:
-                pod_ns = (metric.labels["pod"], metric.labels["namespace"])
-                if namespace is None or metric.labels["namespace"] == namespace:
+            if "pod_name" in metric.labels and "pod_namespace" in metric.labels:
+                pod_ns = (metric.labels["pod_name"], metric.labels["pod_namespace"])
+                if namespace is None or metric.labels["pod_namespace"] == namespace:
                     pods.add(pod_ns)
 
         return [
@@ -238,15 +237,9 @@ class KeplerClient:
         """
         if namespace:
             ns_metrics = self.get_namespace_metrics(namespace)
-            return (
-                ns_metrics["total_cpu_watts"] +
-                ns_metrics["total_memory_watts"] +
-                ns_metrics["total_gpu_watts"]
-            )
+            # Kepler v0.11.2 only provides CPU watts at pod level
+            return ns_metrics.get("total_cpu_watts", 0.0)
         else:
             node_metrics = self.get_node_metrics()
-            return (
-                node_metrics["cpu_watts"] +
-                node_metrics["memory_watts"] +
-                node_metrics["gpu_watts"]
-            )
+            # Return total node CPU power
+            return node_metrics.get("cpu_watts", 0.0)

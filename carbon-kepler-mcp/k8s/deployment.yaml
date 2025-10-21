@@ -18,8 +18,8 @@ spec:
       serviceAccountName: carbon-mcp-sa
       containers:
       - name: mcp-server
-        image: your-registry/carbon-kepler-mcp:latest
-        imagePullPolicy: Always
+        image: localhost:5000/carbon-kepler-mcp:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
           name: http

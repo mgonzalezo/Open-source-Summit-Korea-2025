@@ -187,6 +187,14 @@ Resources:
               linux-tools-common \
               linux-tools-generic
 
+          # Install Docker for MCP server image builds
+          echo "Installing Docker..."
+          apt-get install -y docker.io
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ubuntu
+          echo "Docker installed: $(docker --version)"
+
           # Install K3s
           echo "Installing K3s..."
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --disable traefik" sh -
