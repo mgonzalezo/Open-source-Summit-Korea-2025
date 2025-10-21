@@ -203,24 +203,32 @@ curl -s http://localhost:30080/metrics | grep kepler_pod_cpu_watts | head -10
 ```
 
 **Expected output**:
-```
-kepler_pod_cpu_watts{pod_name="high-power-cpu-burner-789756c966-2rdpt",pod_namespace="demo-workloads"} 0.156234
-kepler_pod_cpu_watts{pod_name="crypto-miner-simulation-64b6ffff96-rwrrz",pod_namespace="demo-workloads"} 0.128456
-kepler_pod_cpu_watts{pod_name="memory-intensive-app-6fc47df958-2b6vg",pod_namespace="demo-workloads"} 0.085123
+
+```text
+kepler_pod_cpu_watts{node_name="ip-172-31-29-93",pod_id="8cbba9f2-6b17-491e-b136-64f5b48998fe",pod_name="high-power-cpu-burner-789756c966-x7rnr",pod_namespace="demo-workloads",state="running",zone="package-0"} 9.859687378599046e-07
+kepler_pod_cpu_watts{node_name="ip-172-31-29-93",pod_id="a53b857b-a9a5-46df-920f-8c27c9ae5b71",pod_name="high-power-cpu-burner-789756c966-982lg",pod_namespace="demo-workloads",state="running",zone="package-0"} 9.859687378599044e-07
+kepler_pod_cpu_watts{node_name="ip-172-31-29-93",pod_id="7d7fe63d-3773-4edd-baf2-ec4454e27f9f",pod_name="crypto-miner-simulation-64b6ffff96-npzvs",pod_namespace="demo-workloads",state="running",zone="package-0"} 4.913992101874121e-07
+kepler_pod_cpu_watts{node_name="ip-172-31-29-93",pod_id="55574e89-4f94-4009-9c8d-55ccc2d9e2b1",pod_name="memory-intensive-app-6fc47df958-hzd9r",pod_namespace="demo-workloads",state="running",zone="package-0"} 4.913992101874122e-07
 [... more metrics ...]
 ```
 
 **What to say**:
-> "Excellent! We can see actual power measurements in watts for each pod.
-> For example, the high-power-cpu-burner is consuming about 0.15 watts, the
-> crypto-miner simulation about 0.13 watts. These numbers might seem small,
-> but remember this is per-pod power. In a real cluster with thousands of
-> pods, these add up quickly."
+> "Excellent! We can see actual power measurements in watts for each pod. The values
+> are in scientific notation - for example, 9.86e-07 watts means 0.000000986 watts.
+> These are instantaneous power readings. Kepler tracks both instant power (watts)
+> and cumulative energy consumption (joules) over time. While individual pods consume
+> microwatts, in a production cluster with thousands of pods running 24/7, this data
+> becomes crucial for optimizing energy efficiency and meeting regulatory compliance."
 
-**Note**: If values show 0.000000, say:
-> "If we see zeros here, it means the workloads haven't been running long
-> enough for Kepler to accumulate energy counter deltas. For this demo, we've
-> had them running for 45+ minutes, so we should see real values."
+**Optional - Show cumulative energy**:
+```bash
+# Show cumulative energy consumption in joules
+curl -s http://localhost:30080/metrics | grep kepler_pod_cpu_joules_total | grep demo-workloads | head -5
+```
+
+**Note**: If values show exactly 0, say:
+> "If we see zeros, it means the workloads are completely idle or just started.
+> For meaningful power analysis, workloads need to be under load for a few minutes."
 
 ---
 
@@ -288,7 +296,92 @@ exit  # Return to your laptop
 
 ---
 
-### Step 6: Test External Accessibility (1 minute)
+### Step 6: Demonstrate Power Analysis Tools (3 minutes)
+
+**Script to say**:
+> "Now let's demonstrate the core functionality - analyzing Kubernetes workloads for
+> power consumption and Korean regulatory compliance. We have 10 test workloads running
+> that simulate different power consumption patterns."
+
+**Commands** (while SSH'd to the instance):
+```bash
+# Show the demo workloads
+sudo kubectl get pods -n demo-workloads
+
+# Run power hotspot detection
+sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c "
+import asyncio
+from src.power_hotspot_tools import PowerHotspotDetector
+from src.kepler_client import KeplerClient
+
+async def test():
+    client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
+    detector = PowerHotspotDetector(client, 424.0, 1.4)
+
+    hotspots, actions = detector.identify_power_hotspots(
+        namespace='demo-workloads',
+        power_threshold_watts=0.1,
+        compliance_check=True
+    )
+
+    print(f'\nAnalysis Results:')
+    print(f'  Hotspots found: {len(hotspots)}')
+    print(f'  Remediation actions: {len(actions)}')
+    print()
+
+    if hotspots:
+        print('Top Power Consumers:')
+        for h in hotspots[:5]:
+            print(f'  {h.rank}. {h.name}: {h.power_watts:.6f}W')
+
+asyncio.run(test())
+"
+```
+
+**Expected output**:
+
+```text
+NAME                                       READY   STATUS    RESTARTS   AGE
+high-power-cpu-burner-789756c966-982lg     1/1     Running   0          45m
+high-power-cpu-burner-789756c966-fvnzr     1/1     Running   0          45m
+high-power-cpu-burner-789756c966-x7rnr     1/1     Running   0          45m
+crypto-miner-simulation-64b6ffff96-npzvs   1/1     Running   0          45m
+memory-intensive-app-6fc47df958-hzd9r      1/1     Running   0          45m
+... (10 pods total)
+
+2025-10-21 11:20:33 [info] kepler_client_initialized
+2025-10-21 11:20:33 [info] identifying_power_hotspots namespace=demo-workloads
+2025-10-21 11:20:33 [info] kepler_metrics_fetched count=3402
+2025-10-21 11:20:33 [info] korea_compliance_assessed carbon_status=COMPLIANT pue_status=COMPLIANT
+
+Analysis Results:
+  Hotspots found: 0
+  Remediation actions: 0
+```
+
+**What to say**:
+> "Perfect! The power analysis tool successfully:
+>
+> 1. Connected to Kepler and fetched 3,402 metrics
+> 2. Analyzed all 10 workloads in the demo-workloads namespace
+> 3. Assessed compliance against Korean regulations:
+>    - 탄소중립 녹색성장 기본법 (Carbon Neutrality Act): 424 gCO2eq/kWh target
+>    - 에너지이용 합리화법 (Energy Use Rationalization Act): PUE ≤ 1.4
+> 4. All workloads are currently compliant
+>
+> In a production environment with higher power consumption, this tool would identify
+> workloads exceeding thresholds and suggest remediation actions like right-sizing,
+> pod consolidation, or migration to more efficient nodes. This same analysis is
+> exposed through the MCP protocol for AI assistants like Claude to query."
+
+**Exit SSH**:
+```bash
+exit  # Return to your laptop
+```
+
+---
+
+### Step 7: Test External Accessibility (1 minute)
 
 **Script to say**:
 > "The MCP server needs to be accessible from the internet so Claude Desktop
@@ -993,25 +1086,58 @@ After your presentation:
 
 ## Backup Plans (If Something Breaks)
 
-### If Claude Desktop can't connect to MCP server:
+### Direct CLI Demonstration (Without Claude Desktop):
 
-**Fallback 1**: Use CLI to show MCP tools
+**Demonstrate Power Hotspot Detection** via command line:
 ```bash
-ssh -i oss-korea.pem ubuntu@57.182.90.243 "
-  sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 << 'EOF'
+# SSH to the instance
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+
+# Run power hotspot detection
+sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c "
+import asyncio
 from src.power_hotspot_tools import PowerHotspotDetector
 from src.kepler_client import KeplerClient
 
-client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
-detector = PowerHotspotDetector(client, 424.0, 1.4)
+async def test():
+    client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
+    detector = PowerHotspotDetector(client, 424.0, 1.4)
 
-hotspots, actions = detector.identify_power_hotspots(namespace='demo-workloads')
-print(f'Found {len(hotspots)} hotspots, {len(actions)} actions')
-for h in hotspots[:3]:
-    print(f'{h.rank}. {h.name}: {h.power_watts}W')
-EOF
+    hotspots, actions = detector.identify_power_hotspots(
+        namespace='demo-workloads',
+        power_threshold_watts=0.1,
+        compliance_check=True
+    )
+
+    print(f'Hotspots: {len(hotspots)}')
+    print(f'Actions: {len(actions)}')
+
+    for h in hotspots[:5]:
+        print(f'{h.rank}. {h.name}: {h.power_watts}W')
+
+asyncio.run(test())
 "
 ```
+
+**Expected output**:
+
+```text
+2025-10-21 11:20:33 [info] kepler_client_initialized
+2025-10-21 11:20:33 [info] identifying_power_hotspots namespace=demo-workloads threshold=0.1
+2025-10-21 11:20:33 [info] listing_top_power_consumers limit=50 namespace=demo-workloads
+2025-10-21 11:20:33 [info] kepler_metrics_fetched count=3402
+2025-10-21 11:20:33 [info] korea_compliance_assessed carbon_status=COMPLIANT pue_status=COMPLIANT
+2025-10-21 11:20:33 [info] hotspots_identified total_actions=0 total_hotspots=0
+Hotspots: 0
+Actions: 0
+```
+
+**What to say**:
+> "We can see the power hotspot detector running. It analyzed all 10 pods in the demo-workloads
+> namespace and assessed them against Korean regulations - the Carbon Neutrality Act (424 gCO2eq/kWh)
+> and Energy Use Rationalization Act (PUE ≤ 1.4). Currently all workloads are compliant, so no
+> hotspots or remediation actions are needed. This is the same analysis that would be available
+> through Claude Desktop's AI interface."
 
 **Fallback 2**: Use simulation script
 ```bash
