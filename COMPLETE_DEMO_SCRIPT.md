@@ -198,8 +198,8 @@ I0121 06:30:50.456789       1 exporter.go:234] Exported 342 metrics
 
 **Next, check if pods have power metrics**:
 ```bash
-# Query Kepler metrics directly
-curl -s http://localhost:28282/metrics | grep kepler_pod_cpu_watts | head -10
+# Query Kepler metrics directly via NodePort
+curl -s http://localhost:30080/metrics | grep kepler_pod_cpu_watts | head -10
 ```
 
 **Expected output**:
