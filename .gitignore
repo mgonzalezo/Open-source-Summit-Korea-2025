@@ -247,6 +247,11 @@ Thumbs.db
 cloudformation-outputs.json
 stack-outputs.json
 
+# Ignore all markdown files except readme.md
+*.md
+!readme.md
+!README.md
+
 # AWS deployment sensitive info
 aws-deployment/*-instance-info.txt
 aws-deployment/k3s-instance-info.txt

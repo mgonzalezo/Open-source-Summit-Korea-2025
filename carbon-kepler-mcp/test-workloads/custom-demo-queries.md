@@ -19,32 +19,69 @@ The MCP server doesn't use conversational questions. Instead, you call **functio
 
 ## Custom Query 1: "Which pods in demo-workloads are using the most power?"
 
+**Option A: Run from your laptop (not SSH'd in yet):**
+
 ```bash
-ssh -i oss-korea.pem ubuntu@57.182.90.243
+ssh -i oss-korea.pem ubuntu@57.182.90.243 'sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c "
+from src.kepler_client import KeplerClient
+
+client = KeplerClient('\''http://kepler.kepler-system.svc.cluster.local:28282/metrics'\'')
+pods = client.list_pods(namespace='\''demo-workloads'\'')
+
+print(f'\''📊 Power Consumption in demo-workloads namespace\\n'\'')
+print(f'\''Found {len(pods)} pods\\n'\'')
+
+pod_power = []
+for pod_info in pods:
+    metrics = client.get_pod_metrics(pod_info['\''pod'\''], pod_info['\''namespace'\''])
+    pod_power.append((pod_info['\''pod'\''], metrics.get('\''cpu_watts'\'', 0.0)))
+
+pod_power.sort(key=lambda x: x[1], reverse=True)
+
+print('\''Top 5 Power Consumers:'\'')
+for i, (pod_name, power) in enumerate(pod_power[:5], 1):
+    print(f'\''  {i}. {pod_name}: {power:.9f} W'\'')
+" 2>&1 | grep -v "^\[" | grep -v "^2025"'
+```
+
+**Option B: If already SSH'd into the instance:**
+
+```bash
 sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c "
 from src.kepler_client import KeplerClient
 
 client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
-
-# Get all pods in demo-workloads namespace
 pods = client.list_pods(namespace='demo-workloads')
 
 print(f'📊 Power Consumption in demo-workloads namespace\n')
 print(f'Found {len(pods)} pods\n')
 
-# Collect power data
 pod_power = []
 for pod_info in pods:
     metrics = client.get_pod_metrics(pod_info['pod'], pod_info['namespace'])
     pod_power.append((pod_info['pod'], metrics.get('cpu_watts', 0.0)))
 
-# Sort by power (highest first)
 pod_power.sort(key=lambda x: x[1], reverse=True)
 
 print('Top 5 Power Consumers:')
 for i, (pod_name, power) in enumerate(pod_power[:5], 1):
     print(f'  {i}. {pod_name}: {power:.9f} W')
-" 2>&1 | grep -v '^\[' | grep -v '^2025'
+" 2>&1 | grep -v "^\[" | grep -v "^2025"
+```
+
+**Expected Output:**
+
+```text
+📊 Power Consumption in demo-workloads namespace
+
+Found 10 pods
+
+Top 5 Power Consumers:
+  1. high-power-cpu-burner-789756c966-982lg: 0.000001259 W
+  2. high-power-cpu-burner-789756c966-x7rnr: 0.000001259 W
+  3. high-power-cpu-burner-789756c966-fvnzr: 0.000001253 W
+  4. memory-intensive-app-6fc47df958-hzd9r: 0.000000634 W
+  5. crypto-miner-simulation-64b6ffff96-npzvs: 0.000000628 W
 ```
 
 ---

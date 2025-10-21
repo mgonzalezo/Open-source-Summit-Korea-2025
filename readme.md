@@ -238,6 +238,14 @@ This project specifically addresses two Korean environmental regulations:
 - Docker (for building MCP server)
 - Python 3.9+ (for local MCP development)
 
+### Important Documentation
+
+Before deploying, review these critical documents:
+
+- **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - Complete deployment guide with all fixes and configurations
+- **[CLAUDE_DESKTOP_WINDOWS_SETUP.md](CLAUDE_DESKTOP_WINDOWS_SETUP.md)** - Claude Desktop setup for demo
+- **[mcp-sse-bridge.js](mcp-sse-bridge.js)** - Fixed bridge script with URL encoding support
+
 ### Quick Deployment
 
 **1. Deploy Kepler Infrastructure:**
