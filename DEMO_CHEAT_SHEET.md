@@ -26,8 +26,8 @@ ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl get pods -n demo-workloa
 # Expected: 10 pods Running (if not, deploy them - see below)
 
 # 4. Quick MCP server health check
-curl http://57.182.90.243:8000/health
-# Expected: {"status":"healthy","tools":8}
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl get pods -n carbon-mcp"
+# Expected: carbon-mcp-server pod in Running state (1/1 READY)
 ```
 
 ✅ All systems ready? → Proceed to demo!
@@ -136,32 +136,38 @@ ssh -i oss-korea.pem ubuntu@57.182.90.243 "
 **Option B**: If no Claude Desktop, show the tools via CLI:
 
 ```bash
-ssh -i oss-korea.pem ubuntu@57.182.90.243 "sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 << 'EOF'
-from src.kepler_client import KeplerClient
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+
+# Show demo workloads
+sudo kubectl get pods -n demo-workloads
+
+# Run power analysis (WORKING COMMAND - tested!)
+sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c "
+import asyncio
 from src.power_hotspot_tools import PowerHotspotDetector
+from src.kepler_client import KeplerClient
 
-client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
-detector = PowerHotspotDetector(client, 424.0, 1.4)
+async def test():
+    client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
+    detector = PowerHotspotDetector(client, 424.0, 1.4)
 
-hotspots, actions = detector.identify_power_hotspots(
-    namespace='demo-workloads',
-    power_threshold_watts=0.000001,
-    compliance_check=True
-)
+    hotspots, actions = detector.identify_power_hotspots(
+        namespace='demo-workloads',
+        power_threshold_watts=0.1,
+        compliance_check=True
+    )
 
-print(f'\n🔍 Power Hotspot Analysis:')
-print(f'  Found: {len(hotspots)} workloads')
-print(f'  Actions: {len(actions)} preventive recommendations\n')
+    print(f'\nPower Analysis Results:')
+    print(f'  Hotspots found: {len(hotspots)}')
+    print(f'  Remediation actions: {len(actions)}')
+    print()
 
-print('Top 5 Power Consumers:')
-for h in hotspots[:5]:
-    print(f'  {h.rank}. {h.name}: {h.power_watts:.6f}W')
+    if hotspots:
+        print('Top Power Consumers:')
+        for h in hotspots[:5]:
+            print(f'  {h.rank}. {h.name}: {h.power_watts:.6f}W')
 
-print('\nTop 3 Preventive Actions:')
-for i, a in enumerate(actions[:3], 1):
-    print(f'  {i}. {a.action_type} - {a.resource}')
-    print(f'     Savings: {a.estimated_co2_reduction_kg_month:.2f} kg CO2/month')
-EOF
+asyncio.run(test())
 "
 ```
 
@@ -331,3 +337,96 @@ Then switch to backup slides
 **Good luck with your presentation!** 🚀🇰🇷
 
 Remember: Even if the live demo fails, you have comprehensive backup slides and can show the code/architecture/results.
+
+---
+
+## Quick Command Reference
+
+### Verify Kepler Metrics
+```bash
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+curl -s http://localhost:30080/metrics | grep kepler_pod_cpu_watts | head -10
+```
+
+### Verify MCP Server
+```bash
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+sudo kubectl logs -n carbon-mcp -l app=carbon-mcp-server --tail=20
+```
+
+### Test Power Analysis (Verified Working!)
+```bash
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 -c "
+import asyncio
+from src.power_hotspot_tools import PowerHotspotDetector
+from src.kepler_client import KeplerClient
+
+async def test():
+    client = KeplerClient('http://kepler.kepler-system.svc.cluster.local:28282/metrics')
+    detector = PowerHotspotDetector(client, 424.0, 1.4)
+    hotspots, actions = detector.identify_power_hotspots(
+        namespace='demo-workloads',
+        power_threshold_watts=0.1,
+        compliance_check=True
+    )
+    print(f'Hotspots: {len(hotspots)}, Actions: {len(actions)}')
+
+asyncio.run(test())
+"
+```
+
+---
+
+## Troubleshooting
+
+### Instance won't start
+```bash
+aws ec2 start-instances --instance-ids i-013b5cd6ee511f107 --region ap-northeast-1 --profile mgonzalezo
+# Wait 3 minutes
+```
+
+### MCP server pod crashed
+```bash
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+sudo kubectl delete pod -n carbon-mcp -l app=carbon-mcp-server
+# Wait 30 seconds for auto-restart
+```
+
+### Kepler not collecting metrics
+```bash
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+sudo kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler --tail=50
+```
+
+### Demo workloads not deployed
+```bash
+ssh -i oss-korea.pem ubuntu@57.182.90.243
+sudo kubectl apply -f ~/Open-source-Summit-Korea-2025/carbon-kepler-mcp/test-workloads/high-power-app.yaml
+```
+
+---
+
+## After Demo - Cleanup
+
+```bash
+# Stop instance to save costs (~$4/hour)
+cd aws-deployment && ./scripts/stop-instance.sh
+
+# Verify stopped
+aws ec2 describe-instances --instance-ids i-013b5cd6ee511f107 --region ap-northeast-1 --profile mgonzalezo --query 'Reservations[0].Instances[0].State.Name'
+# Expected: "stopped"
+```
+
+---
+
+## Emergency Fallbacks
+
+If **everything** fails during demo:
+
+1. **Show slides only** - All architecture diagrams are self-explanatory
+2. **Walk through code** - Show the 8 MCP tools in `src/mcp_server.py`
+3. **Show GitHub repo** - Live code is always accessible
+4. **Reference documentation** - Point to COMPLETE_DEMO_SCRIPT.md
+
+**Remember**: The concept is solid even if live demo fails. Focus on the **why** (Korean regulations) and the **how** (MCP + Kepler).
