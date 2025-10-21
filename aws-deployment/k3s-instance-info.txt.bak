@@ -1,0 +1,36 @@
+Kepler K3s Deployment Information
+==================================
+
+Stack Name:    kepler-k3s-stack
+Instance ID:   i-01d31a7c7323ef2f1
+Instance Type: c5.metal
+Public IP:     52.91.152.207
+Region:        us-east-1
+
+SSH Access:
+  ssh -i oss-korea.pem ubuntu@52.91.152.207
+
+Metrics Endpoints:
+  HTTPS: https://52.91.152.207:30443/metrics
+  HTTP:  http://52.91.152.207:30080/metrics
+
+Test Metrics:
+  curl -k -s https://52.91.152.207:30443/metrics | grep kepler_node_cpu_usage_ratio
+  curl -k -s https://52.91.152.207:30443/metrics | grep kepler_node_cpu_watts
+
+Check Installation Status:
+  ssh -i oss-korea.pem ubuntu@52.91.152.207
+  tail -f /var/log/user-data.log
+  cat /home/ubuntu/kepler-info.txt
+
+Kubernetes Access:
+  kubectl get pods -n kepler-system
+  kubectl get pods -n kepler-model-server
+  kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler
+
+Management Scripts:
+  ./stop-stack.sh   - Stop instance (save costs)
+  ./start-stack.sh  - Start instance
+  ./delete-stack.sh - Delete everything
+
+Deployed: Sat Oct 18 07:33:13 PM JST 2025

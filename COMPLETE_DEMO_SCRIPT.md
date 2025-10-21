@@ -64,11 +64,11 @@ Starting instance i-01d31a7c7323ef2f1...
 
 Waiting for instance to start...
 Instance started successfully!
-Current IP: 52.91.152.207
+Current IP: 57.182.90.243
 ```
 
 **Point to highlight**:
-> "Note the IP address: 52.91.152.207 - this is where our Kepler metrics and
+> "Note the IP address: 57.182.90.243 - this is where our Kepler metrics and
 > MCP server are running. The instance preserves all configuration across
 > stop/start cycles to save costs - it's about $117 per day running, but only
 > $0.33 per day when stopped."
@@ -84,7 +84,7 @@ Current IP: 52.91.152.207
 **Show architecture slide** (or draw on whiteboard):
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ AWS EC2 c5.metal Instance (52.91.152.207)                   │
+│ AWS EC2 c5.metal Instance (57.182.90.243)                   │
 │                                                              │
 │  ┌──────────────────────────────────────────────┐          │
 │  │ K3s Cluster                                  │          │
@@ -138,7 +138,7 @@ Current IP: 52.91.152.207
 **Commands**:
 ```bash
 # SSH into the instance
-ssh -i oss-korea.pem ubuntu@52.91.152.207
+ssh -i oss-korea.pem ubuntu@57.182.90.243
 
 # Check all pods across all namespaces
 sudo kubectl get pods -A
@@ -351,7 +351,7 @@ aws ec2 describe-security-groups \
 > "Claude Desktop is Anthropic's official desktop application. I've configured
 > it to connect to our MCP server by adding a simple JSON config file at
 > ~/.config/Claude/claude_desktop_config.json. The configuration just points
-> to our server URL: http://52.91.152.207:8000/sse"
+> to our server URL: http://57.182.90.243:8000/sse"
 
 **Show the config file** (optional):
 ```bash
@@ -997,7 +997,7 @@ After your presentation:
 
 **Fallback 1**: Use CLI to show MCP tools
 ```bash
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "
   sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 << 'EOF'
 from src.power_hotspot_tools import PowerHotspotDetector
 from src.kepler_client import KeplerClient
@@ -1015,7 +1015,7 @@ EOF
 
 **Fallback 2**: Use simulation script
 ```bash
-ssh -i oss-korea.pem ubuntu@52.91.152.207 "
+ssh -i oss-korea.pem ubuntu@57.182.90.243 "
   sudo kubectl cp ~/carbon-kepler-mcp/test-workloads/demo-non-compliant.py carbon-mcp/\$(sudo kubectl get pod -n carbon-mcp -l app=carbon-mcp-server -o jsonpath='{.items[0].metadata.name}'):/tmp/demo.py && \
   sudo kubectl exec -n carbon-mcp deployment/carbon-mcp-server -- python3 /tmp/demo.py
 "
