@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation stack for Kepler on bare-metal EC2 with K3s - Fully Automated with Model Server'
+Description: 'CloudFormation stack for Kepler on bare-metal EC2 with K3s - Fully Automated with RAPL (Direct Hardware Measurements)'
 
 Parameters:
   InstanceType:
@@ -38,7 +38,7 @@ Parameters:
     ConstraintDescription: Must be a valid VPC ID
 
   AutoInstallKepler:
-    Description: Automatically install Kepler with Model Server on boot
+    Description: Automatically install Kepler with RAPL on boot
     Type: String
     Default: 'true'
     AllowedValues:
@@ -67,7 +67,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: kepler-k3s-security-group
-      GroupDescription: Security group for Kepler K3s cluster with Model Server
+      GroupDescription: Security group for Kepler K3s cluster with RAPL
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -100,11 +100,6 @@ Resources:
           ToPort: 28282
           CidrIp: !Ref SSHLocation
           Description: Kepler Internal Metrics
-        - IpProtocol: tcp
-          FromPort: 8100
-          ToPort: 8100
-          CidrIp: !Ref SSHLocation
-          Description: Kepler Model Server
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -192,6 +187,29 @@ Resources:
               linux-tools-common \
               linux-tools-generic
 
+          # Enable RAPL for direct hardware power measurements
+          echo "Enabling RAPL (Running Average Power Limit)..."
+          apt-get install -y linux-modules-$(uname -r) linux-modules-extra-$(uname -r)
+
+          # Load RAPL modules
+          modprobe msr
+          modprobe intel_rapl_common
+          modprobe intel_rapl_msr
+
+          # Make modules load on boot
+          echo "msr" >> /etc/modules
+          echo "intel_rapl_common" >> /etc/modules
+          echo "intel_rapl_msr" >> /etc/modules
+
+          # Verify RAPL is working
+          echo "Verifying RAPL..."
+          if [ -d "/sys/class/powercap/intel-rapl:0" ]; then
+            echo "✅ RAPL enabled successfully"
+            ls -la /sys/class/powercap/ | grep intel-rapl
+          else
+            echo "⚠️ RAPL zones not found, will fall back to model-based estimation"
+          fi
+
           # Install Docker for MCP server image builds
           echo "Installing Docker..."
           apt-get install -y docker.io
@@ -227,13 +245,13 @@ Resources:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           mv kustomize /usr/local/bin/
 
-          # Create automated Kepler setup script with Model Server
+          # Create automated Kepler setup script with RAPL
           cat > /home/ubuntu/setup-kepler-automated.sh << 'EOFSETUP'
           #!/bin/bash
           set -e
 
           echo "========================================="
-          echo "Automated Kepler + Model Server Setup"
+          echo "Automated Kepler + RAPL Setup"
           echo "========================================="
 
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -255,7 +273,7 @@ Resources:
           wget -q https://github.com/sustainable-computing-io/kepler/archive/refs/tags/v0.11.2.tar.gz
           tar -xzf v0.11.2.tar.gz
 
-          # Create Helm values for Kepler with Model Server support
+          # Create Helm values for Kepler with RAPL (direct hardware measurements)
           cat > /tmp/kepler-values.yaml << 'EOFVALUES'
           image:
             repository: quay.io/sustainable_computing_io/kepler
@@ -275,7 +293,7 @@ Resources:
               maxTerminated: 500
               minTerminatedEnergyThreshold: 10
             rapl:
-              zones: []
+              zones: []  # Empty = auto-detect RAPL zones
             exporter:
               stdout:
                 enabled: false
@@ -301,17 +319,9 @@ Resources:
               nodeName: ""
             dev:
               fake-cpu-meter:
-                enabled: true
-                zones:
-                  - package-0
+                enabled: false  # Disabled - using RAPL instead!
             model:
-              enabled: true
-              server:
-                url: http://kepler-model-server.kepler-model-server.svc.cluster.local:8100
-              estimator:
-                enabled: true
-                select: true
-                sidecar: false
+              enabled: false  # Disabled - using RAPL instead!
 
           daemonset:
             hostPID: true
@@ -372,96 +382,9 @@ Resources:
             --wait \
             --timeout 10m
 
-          # Deploy Kepler Model Server
-          echo "Deploying Kepler Model Server..."
-          cat > /tmp/kepler-model-server.yaml << 'EOFMODEL'
-          ---
-          apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: kepler-model-server
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: kepler-model-server
-            namespace: kepler-model-server
-            labels:
-              app: kepler-model-server
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: kepler-model-server
-            template:
-              metadata:
-                labels:
-                  app: kepler-model-server
-              spec:
-                containers:
-                - name: server-api
-                  image: quay.io/sustainable_computing_io/kepler_model_server:latest
-                  imagePullPolicy: Always
-                  command:
-                  - python3
-                  - -u
-                  - /kepler_model/src/kepler_model/server/model_server.py
-                  ports:
-                  - containerPort: 8100
-                    name: http
-                    protocol: TCP
-                  env:
-                  - name: MODEL_SERVER_PORT
-                    value: "8100"
-                  - name: MODEL_PATH
-                    value: "/mnt/models"
-                  resources:
-                    requests:
-                      cpu: 100m
-                      memory: 512Mi
-                    limits:
-                      cpu: 1000m
-                      memory: 2Gi
-                  volumeMounts:
-                  - name: mnt
-                    mountPath: /mnt
-                  - name: data
-                    mountPath: /data
-                volumes:
-                - name: mnt
-                  emptyDir: {}
-                - name: data
-                  emptyDir: {}
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: kepler-model-server
-            namespace: kepler-model-server
-            labels:
-              app: kepler-model-server
-          spec:
-            type: ClusterIP
-            selector:
-              app: kepler-model-server
-            ports:
-              - name: http
-                port: 8100
-                targetPort: 8100
-                protocol: TCP
-          EOFMODEL
-
-          kubectl apply -f /tmp/kepler-model-server.yaml
-
-          # Wait for Model Server
-          echo "Waiting for Model Server to be ready..."
-          kubectl wait --for=condition=ready pod -l app=kepler-model-server -n kepler-model-server --timeout=300s
-
-          # Restart Kepler pods to connect to Model Server
-          echo "Restarting Kepler pods to connect to Model Server..."
-          kubectl delete pod -n kepler-system -l app.kubernetes.io/name=kepler
-          sleep 20
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=kepler -n kepler-system --timeout=300s
+          # RAPL is now enabled - Kepler will use direct hardware measurements
+          echo "Kepler deployed with RAPL (direct hardware power measurements)"
+          echo "No Model Server needed - using Intel RAPL zones"
 
           # Deploy HTTPS Proxy for Kepler metrics
           echo "Setting up HTTPS access for Kepler metrics..."
@@ -617,8 +540,9 @@ Resources:
           echo "Kepler Status:"
           kubectl get pods -n kepler-system
           echo ""
-          echo "Model Server Status:"
-          kubectl get pods -n kepler-model-server
+          echo "RAPL Status:"
+          echo "  Checking RAPL zones..."
+          ls -la /sys/class/powercap/ | grep intel-rapl || echo "  ⚠️  RAPL zones not visible (check logs)"
           echo ""
           echo "Access Metrics:"
           INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
@@ -639,24 +563,28 @@ Resources:
 
           Components:
           - Kepler v0.11.2 (DaemonSet)
-          - Model Server (latest)
+          - Intel RAPL (Direct Hardware Power Measurements)
           - HTTPS Proxy (Nginx)
           - cert-manager v1.18.2
 
           Configuration:
-          - Fake CPU meter: Enabled (for initialization)
-          - Model Server: Enabled (ML-based power estimation)
-          - Real metrics: eBPF CPU, memory, process tracking
+          - Power Measurement: RAPL (Intel Running Average Power Limit)
+          - RAPL Modules: msr, intel_rapl_common, intel_rapl_msr
+          - RAPL Zones: Auto-detected (package + dram)
+          - Real metrics: eBPF CPU, memory, process tracking + RAPL energy
 
           Access:
           kubectl get pods -n kepler-system
-          kubectl get pods -n kepler-model-server
           kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler
-          kubectl logs -n kepler-model-server -l app.kubernetes.io/name=kepler-model-server
+
+          Verify RAPL:
+          ls -la /sys/class/powercap/
+          lsmod | grep rapl
 
           Test metrics:
-          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_cpu_usage_ratio
-          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_cpu_watts
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_container_cpu_joules_total | head -5
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep 'zone="package"'
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep 'zone="dram"'
           EOFINFO
 
           chown ubuntu:ubuntu /home/ubuntu/kepler-info.txt
