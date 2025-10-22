@@ -532,6 +532,64 @@ Resources:
           # Wait for HTTPS proxy
           kubectl wait --for=condition=ready pod -l app=kepler-https-proxy -n kepler-system --timeout=300s
 
+          # Clone the repository for MCP server and test workloads
+          echo ""
+          echo "========================================="
+          echo "Cloning Open Source Summit Korea 2025 repository..."
+          echo "========================================="
+          cd /home/ubuntu
+          if [ -d "Open-source-Summit-Korea-2025" ]; then
+            rm -rf Open-source-Summit-Korea-2025
+          fi
+          git clone https://github.com/marcosgonzalezo/Open-source-Summit-Korea-2025.git
+          chown -R ubuntu:ubuntu Open-source-Summit-Korea-2025
+
+          # Deploy test workloads for compliance demonstrations
+          echo ""
+          echo "========================================="
+          echo "Deploying test workloads for compliance demos..."
+          echo "========================================="
+          kubectl apply -f /home/ubuntu/Open-source-Summit-Korea-2025/carbon-kepler-mcp/k8s/test-workloads.yaml
+
+          echo "Waiting for test workloads to be ready..."
+          kubectl wait --for=condition=ready pod -l app=nginx-light -n workload-test --timeout=120s || true
+          kubectl wait --for=condition=ready pod -l app=redis-cache -n workload-test --timeout=120s || true
+          kubectl wait --for=condition=ready pod -l app=stress-cpu -n workload-test --timeout=120s || true
+
+          echo "Test workloads deployed:"
+          kubectl get pods -n workload-test -o wide
+
+          # Build and deploy Carbon-Kepler MCP Server
+          echo ""
+          echo "========================================="
+          echo "Building and deploying Carbon-Kepler MCP Server..."
+          echo "========================================="
+
+          cd /home/ubuntu/Open-source-Summit-Korea-2025/carbon-kepler-mcp
+
+          # Build Docker image
+          echo "Building carbon-kepler-mcp Docker image..."
+          docker build -t carbon-kepler-mcp:latest .
+
+          # Import into K3s containerd
+          echo "Importing image into K3s containerd..."
+          docker save carbon-kepler-mcp:latest | k3s ctr images import -
+
+          # Create namespace
+          kubectl create namespace carbon-mcp || true
+
+          # Deploy MCP server
+          echo "Deploying MCP server to Kubernetes..."
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+          # Wait for MCP server to be ready
+          echo "Waiting for MCP server to be ready..."
+          kubectl wait --for=condition=ready pod -l app=carbon-mcp-server -n carbon-mcp --timeout=300s
+
+          echo "MCP Server deployed successfully!"
+          kubectl get pods -n carbon-mcp -o wide
+
           echo ""
           echo "========================================="
           echo "✅ Setup Complete!"
@@ -539,6 +597,12 @@ Resources:
           echo ""
           echo "Kepler Status:"
           kubectl get pods -n kepler-system
+          echo ""
+          echo "Test Workloads:"
+          kubectl get pods -n workload-test
+          echo ""
+          echo "MCP Server:"
+          kubectl get pods -n carbon-mcp
           echo ""
           echo "RAPL Status:"
           echo "  Checking RAPL zones..."
@@ -548,43 +612,103 @@ Resources:
           INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
           echo "  HTTPS: curl -k https://$INSTANCE_IP:30443/metrics"
           echo "  HTTP:  curl http://$INSTANCE_IP:30080/metrics"
+          echo "  MCP SSE: curl -N http://$INSTANCE_IP:30800/sse"
           echo ""
           echo "Deployment Summary saved to: /home/ubuntu/kepler-info.txt"
 
           # Save deployment info
           cat > /home/ubuntu/kepler-info.txt << EOFINFO
-          Kepler Deployment Information
-          ==============================
+          Kepler + MCP Deployment Information for Open Source Summit Korea 2025
+          ======================================================================
 
           Instance IP: $INSTANCE_IP
 
-          HTTPS Metrics: https://$INSTANCE_IP:30443/metrics
-          HTTP Metrics:  http://$INSTANCE_IP:30080/metrics
+          Endpoints:
+          ----------
+          Kepler HTTPS Metrics: https://$INSTANCE_IP:30443/metrics
+          Kepler HTTP Metrics:  http://$INSTANCE_IP:30080/metrics
+          MCP SSE Endpoint:     http://$INSTANCE_IP:30800/sse
 
-          Components:
-          - Kepler v0.11.2 (DaemonSet)
-          - Intel RAPL (Direct Hardware Power Measurements)
-          - HTTPS Proxy (Nginx)
-          - cert-manager v1.18.2
+          Components Deployed:
+          -------------------
+          1. Kepler v0.11.2 (Power Measurement)
+             - DaemonSet in kepler-system namespace
+             - Intel RAPL (Direct Hardware Power Measurements)
+             - HTTPS Proxy (Nginx with self-signed cert)
+             - cert-manager v1.18.2
 
-          Configuration:
-          - Power Measurement: RAPL (Intel Running Average Power Limit)
+          2. Carbon-Kepler MCP Server
+             - FastMCP 2.12.5 (SSE Transport)
+             - Namespace: carbon-mcp
+             - 8 tools for carbon-aware workload compliance
+             - Korean Environmental Standards compliance checks
+
+          3. Test Workloads (workload-test namespace)
+             - nginx-light: Low-power web server (COMPLIANT)
+             - redis-cache: Medium-power cache (COMPLIANT)
+             - stress-cpu: High-power compute (2 replicas for testing)
+
+          Power Measurement Configuration:
+          -------------------------------
+          - Method: RAPL (Intel Running Average Power Limit)
           - RAPL Modules: msr, intel_rapl_common, intel_rapl_msr
           - RAPL Zones: Auto-detected (package + dram)
-          - Real metrics: eBPF CPU, memory, process tracking + RAPL energy
+          - Metrics: eBPF CPU, memory, process tracking + RAPL energy
+          - Collection Interval: 5 seconds
 
-          Access:
-          kubectl get pods -n kepler-system
-          kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler
+          Korean Environmental Standards:
+          ------------------------------
+          - 탄소중립 녹색성장 기본법: 424 gCO2eq/kWh
+          - 에너지이용 합리화법: PUE ≤ 1.4
 
-          Verify RAPL:
+          Quick Access Commands:
+          ---------------------
+          # View all deployments
+          kubectl get pods -A
+
+          # Kepler metrics
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_package_energy_joule
+
+          # Test workloads
+          kubectl get pods -n workload-test -o wide
+
+          # MCP Server
+          kubectl get pods -n carbon-mcp
+          kubectl logs -n carbon-mcp -l app=carbon-mcp-server
+
+          # Test MCP SSE connection
+          curl -N -H "Accept: text/event-stream" http://$INSTANCE_IP:30800/sse
+
+          Verify RAPL Working:
+          -------------------
           ls -la /sys/class/powercap/
           lsmod | grep rapl
-
-          Test metrics:
-          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_container_cpu_joules_total | head -5
           curl -k -s https://$INSTANCE_IP:30443/metrics | grep 'zone="package"'
           curl -k -s https://$INSTANCE_IP:30443/metrics | grep 'zone="dram"'
+
+          Windows Claude Desktop Configuration:
+          ------------------------------------
+          1. Copy mcp-sse-bridge-windows.js to C:\\Users\\<username>\\
+          2. Update claude_desktop_config.json:
+          {
+            "mcpServers": {
+              "carbon-kepler": {
+                "command": "node",
+                "args": [
+                  "C:\\\\Users\\\\<username>\\\\mcp-sse-bridge-windows.js",
+                  "http://$INSTANCE_IP:30800/sse"
+                ]
+              }
+            }
+          }
+
+          Repository Location:
+          -------------------
+          /home/ubuntu/Open-source-Summit-Korea-2025/
+
+          MCP Server Code: carbon-kepler-mcp/
+          Test Workloads: carbon-kepler-mcp/k8s/test-workloads.yaml
+          Bridge Script: mcp-sse-bridge-windows.js
           EOFINFO
 
           chown ubuntu:ubuntu /home/ubuntu/kepler-info.txt
@@ -662,9 +786,17 @@ Outputs:
     Description: HTTP URL for Kepler metrics
     Value: !Sub 'http://${KeplerEIP}:30080/metrics'
 
+  MCPSSEEndpoint:
+    Description: MCP SSE endpoint for Claude Desktop integration
+    Value: !Sub 'http://${KeplerEIP}:30800/sse'
+
   TestCommand:
     Description: Test Kepler metrics endpoint
     Value: !Sub 'curl -k https://${KeplerEIP}:30443/metrics | grep kepler_node'
+
+  MCPTestCommand:
+    Description: Test MCP SSE connection
+    Value: !Sub 'curl -N -H "Accept: text/event-stream" http://${KeplerEIP}:30800/sse'
 
   SetupStatus:
     Description: How to check setup status
@@ -672,6 +804,25 @@ Outputs:
       SSH Command: ssh -i ${KeyName}.pem ubuntu@${KeplerEIP}
       Check logs: tail -f /var/log/user-data.log
       Deployment info: cat /home/ubuntu/kepler-info.txt
+
+  ComponentsDeployed:
+    Description: List of deployed components
+    Value: !Sub |
+      ✅ Kepler v0.11.2 with RAPL (kepler-system namespace)
+      ✅ Carbon-Kepler MCP Server with 8 tools (carbon-mcp namespace)
+      ✅ Test Workloads: nginx-light, redis-cache, stress-cpu (workload-test namespace)
+
+      MCP SSE Endpoint: http://${KeplerEIP}:30800/sse
+
+      Windows Claude Desktop Config:
+      {
+        "mcpServers": {
+          "carbon-kepler": {
+            "command": "node",
+            "args": ["C:\\Users\\<username>\\mcp-sse-bridge-windows.js", "http://${KeplerEIP}:30800/sse"]
+          }
+        }
+      }
 
   InstanceType:
     Description: Instance type used

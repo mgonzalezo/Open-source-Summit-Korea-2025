@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "carbon-kepler": {
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/client-sse",
+        "http://52.198.28.44:30800/sse"
+      ]
+    }
+  }
+}
