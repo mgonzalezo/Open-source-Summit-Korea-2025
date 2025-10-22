@@ -1,15 +1,15 @@
 #!/bin/bash
 #
 # Deploy Kepler K3s Stack with Automated Setup
-# This script deploys a fully configured Kepler environment with Model Server
+# This script deploys a fully configured Kepler environment with RAPL
 #
 
 set -e
 
 # Configuration
-STACK_NAME="kepler-k3s-stack"
-REGION="us-east-1"
-PROFILE="${AWS_PROFILE:-default}"
+STACK_NAME="kepler-k3s-rapl"
+REGION="ap-northeast-1"
+PROFILE="${AWS_PROFILE:-mgonzalezo}"
 KEY_NAME="oss-korea"
 INSTANCE_TYPE="c5.metal"
 VOLUME_SIZE="100"

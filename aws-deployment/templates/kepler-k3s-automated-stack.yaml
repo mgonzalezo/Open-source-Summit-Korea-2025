@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation stack for Kepler on bare-metal EC2 with K3s - Fully Automated with Model Server'
+Description: 'CloudFormation stack for Kepler on bare-metal EC2 with K3s - Fully Automated with RAPL (Direct Hardware Measurements)'
 
 Parameters:
   InstanceType:
@@ -38,7 +38,7 @@ Parameters:
     ConstraintDescription: Must be a valid VPC ID
 
   AutoInstallKepler:
-    Description: Automatically install Kepler with Model Server on boot
+    Description: Automatically install Kepler with RAPL on boot
     Type: String
     Default: 'true'
     AllowedValues:
@@ -67,7 +67,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: kepler-k3s-security-group
-      GroupDescription: Security group for Kepler K3s cluster with Model Server
+      GroupDescription: Security group for Kepler K3s cluster with RAPL
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -100,11 +100,6 @@ Resources:
           ToPort: 28282
           CidrIp: !Ref SSHLocation
           Description: Kepler Internal Metrics
-        - IpProtocol: tcp
-          FromPort: 8100
-          ToPort: 8100
-          CidrIp: !Ref SSHLocation
-          Description: Kepler Model Server
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -192,6 +187,29 @@ Resources:
               linux-tools-common \
               linux-tools-generic
 
+          # Enable RAPL for direct hardware power measurements
+          echo "Enabling RAPL (Running Average Power Limit)..."
+          apt-get install -y linux-modules-$(uname -r) linux-modules-extra-$(uname -r)
+
+          # Load RAPL modules
+          modprobe msr
+          modprobe intel_rapl_common
+          modprobe intel_rapl_msr
+
+          # Make modules load on boot
+          echo "msr" >> /etc/modules
+          echo "intel_rapl_common" >> /etc/modules
+          echo "intel_rapl_msr" >> /etc/modules
+
+          # Verify RAPL is working
+          echo "Verifying RAPL..."
+          if [ -d "/sys/class/powercap/intel-rapl:0" ]; then
+            echo "✅ RAPL enabled successfully"
+            ls -la /sys/class/powercap/ | grep intel-rapl
+          else
+            echo "⚠️ RAPL zones not found, will fall back to model-based estimation"
+          fi
+
           # Install Docker for MCP server image builds
           echo "Installing Docker..."
           apt-get install -y docker.io
@@ -227,13 +245,13 @@ Resources:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           mv kustomize /usr/local/bin/
 
-          # Create automated Kepler setup script with Model Server
+          # Create automated Kepler setup script with RAPL
           cat > /home/ubuntu/setup-kepler-automated.sh << 'EOFSETUP'
           #!/bin/bash
           set -e
 
           echo "========================================="
-          echo "Automated Kepler + Model Server Setup"
+          echo "Automated Kepler + RAPL Setup"
           echo "========================================="
 
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -242,20 +260,13 @@ Resources:
           echo "Waiting for K3s to be fully ready..."
           kubectl wait --for=condition=ready node --all --timeout=300s
 
-          # Install cert-manager
-          echo "Installing cert-manager v1.18.2..."
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml
-
-          echo "Waiting for cert-manager pods..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
-
           # Download Kepler v0.11.2 Helm chart
           echo "Downloading Kepler v0.11.2..."
           cd /home/ubuntu
           wget -q https://github.com/sustainable-computing-io/kepler/archive/refs/tags/v0.11.2.tar.gz
           tar -xzf v0.11.2.tar.gz
 
-          # Create Helm values for Kepler with Model Server support
+          # Create Helm values for Kepler with RAPL (direct hardware measurements)
           cat > /tmp/kepler-values.yaml << 'EOFVALUES'
           image:
             repository: quay.io/sustainable_computing_io/kepler
@@ -275,7 +286,7 @@ Resources:
               maxTerminated: 500
               minTerminatedEnergyThreshold: 10
             rapl:
-              zones: []
+              zones: []  # Empty = auto-detect RAPL zones
             exporter:
               stdout:
                 enabled: false
@@ -301,17 +312,9 @@ Resources:
               nodeName: ""
             dev:
               fake-cpu-meter:
-                enabled: true
-                zones:
-                  - package-0
+                enabled: false  # Disabled - using RAPL instead!
             model:
-              enabled: true
-              server:
-                url: http://kepler-model-server.kepler-model-server.svc.cluster.local:8100
-              estimator:
-                enabled: true
-                select: true
-                sidecar: false
+              enabled: false  # Disabled - using RAPL instead!
 
           daemonset:
             hostPID: true
@@ -372,132 +375,26 @@ Resources:
             --wait \
             --timeout 10m
 
-          # Deploy Kepler Model Server
-          echo "Deploying Kepler Model Server..."
-          cat > /tmp/kepler-model-server.yaml << 'EOFMODEL'
-          ---
-          apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: kepler-model-server
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: kepler-model-server
-            namespace: kepler-model-server
-            labels:
-              app: kepler-model-server
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: kepler-model-server
-            template:
-              metadata:
-                labels:
-                  app: kepler-model-server
-              spec:
-                containers:
-                - name: server-api
-                  image: quay.io/sustainable_computing_io/kepler_model_server:latest
-                  imagePullPolicy: Always
-                  command:
-                  - python3
-                  - -u
-                  - /kepler_model/src/kepler_model/server/model_server.py
-                  ports:
-                  - containerPort: 8100
-                    name: http
-                    protocol: TCP
-                  env:
-                  - name: MODEL_SERVER_PORT
-                    value: "8100"
-                  - name: MODEL_PATH
-                    value: "/mnt/models"
-                  resources:
-                    requests:
-                      cpu: 100m
-                      memory: 512Mi
-                    limits:
-                      cpu: 1000m
-                      memory: 2Gi
-                  volumeMounts:
-                  - name: mnt
-                    mountPath: /mnt
-                  - name: data
-                    mountPath: /data
-                volumes:
-                - name: mnt
-                  emptyDir: {}
-                - name: data
-                  emptyDir: {}
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: kepler-model-server
-            namespace: kepler-model-server
-            labels:
-              app: kepler-model-server
-          spec:
-            type: ClusterIP
-            selector:
-              app: kepler-model-server
-            ports:
-              - name: http
-                port: 8100
-                targetPort: 8100
-                protocol: TCP
-          EOFMODEL
-
-          kubectl apply -f /tmp/kepler-model-server.yaml
-
-          # Wait for Model Server
-          echo "Waiting for Model Server to be ready..."
-          kubectl wait --for=condition=ready pod -l app=kepler-model-server -n kepler-model-server --timeout=300s
-
-          # Restart Kepler pods to connect to Model Server
-          echo "Restarting Kepler pods to connect to Model Server..."
-          kubectl delete pod -n kepler-system -l app.kubernetes.io/name=kepler
-          sleep 20
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=kepler -n kepler-system --timeout=300s
+          # RAPL is now enabled - Kepler will use direct hardware measurements
+          echo "Kepler deployed with RAPL (direct hardware power measurements)"
+          echo "No Model Server needed - using Intel RAPL zones"
 
           # Deploy HTTPS Proxy for Kepler metrics
           echo "Setting up HTTPS access for Kepler metrics..."
 
-          # Create self-signed certificate issuer
-          cat > /tmp/cert-issuer.yaml << 'EOFCERT'
-          ---
-          apiVersion: cert-manager.io/v1
-          kind: Issuer
-          metadata:
-            name: kepler-selfsigned-issuer
-            namespace: kepler-system
-          spec:
-            selfSigned: {}
-          ---
-          apiVersion: cert-manager.io/v1
-          kind: Certificate
-          metadata:
-            name: kepler-tls
-            namespace: kepler-system
-          spec:
-            secretName: kepler-tls-secret
-            issuerRef:
-              name: kepler-selfsigned-issuer
-              kind: Issuer
-            dnsNames:
-              - kepler.local
-              - kepler.kepler-system.svc
-              - kepler.kepler-system.svc.cluster.local
-          EOFCERT
+          # Generate self-signed certificate with OpenSSL
+          echo "Generating self-signed TLS certificate..."
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /tmp/tls.key \
+            -out /tmp/tls.crt \
+            -subj "/CN=kepler.local/O=kepler" \
+            -addext "subjectAltName=DNS:kepler.local,DNS:kepler.kepler-system.svc,DNS:kepler.kepler-system.svc.cluster.local"
 
-          kubectl apply -f /tmp/cert-issuer.yaml
-
-          # Wait for certificate
-          sleep 10
-          kubectl wait --for=condition=ready certificate kepler-tls -n kepler-system --timeout=60s
+          # Create Kubernetes secret with TLS certificate
+          kubectl create secret tls kepler-tls-secret \
+            --cert=/tmp/tls.crt \
+            --key=/tmp/tls.key \
+            -n kepler-system
 
           # Deploy HTTPS proxy
           cat > /tmp/kepler-https-proxy.yaml << 'EOFPROXY'
@@ -609,6 +506,64 @@ Resources:
           # Wait for HTTPS proxy
           kubectl wait --for=condition=ready pod -l app=kepler-https-proxy -n kepler-system --timeout=300s
 
+          # Clone the repository for MCP server and test workloads
+          echo ""
+          echo "========================================="
+          echo "Cloning Open Source Summit Korea 2025 repository..."
+          echo "========================================="
+          cd /home/ubuntu
+          if [ -d "Open-source-Summit-Korea-2025" ]; then
+            rm -rf Open-source-Summit-Korea-2025
+          fi
+          git clone https://github.com/marcosgonzalezo/Open-source-Summit-Korea-2025.git
+          chown -R ubuntu:ubuntu Open-source-Summit-Korea-2025
+
+          # Deploy test workloads for compliance demonstrations
+          echo ""
+          echo "========================================="
+          echo "Deploying test workloads for compliance demos..."
+          echo "========================================="
+          kubectl apply -f /home/ubuntu/Open-source-Summit-Korea-2025/carbon-kepler-mcp/k8s/test-workloads.yaml
+
+          echo "Waiting for test workloads to be ready..."
+          kubectl wait --for=condition=ready pod -l app=nginx-light -n workload-test --timeout=120s || true
+          kubectl wait --for=condition=ready pod -l app=redis-cache -n workload-test --timeout=120s || true
+          kubectl wait --for=condition=ready pod -l app=stress-cpu -n workload-test --timeout=120s || true
+
+          echo "Test workloads deployed:"
+          kubectl get pods -n workload-test -o wide
+
+          # Build and deploy Carbon-Kepler MCP Server
+          echo ""
+          echo "========================================="
+          echo "Building and deploying Carbon-Kepler MCP Server..."
+          echo "========================================="
+
+          cd /home/ubuntu/Open-source-Summit-Korea-2025/carbon-kepler-mcp
+
+          # Build Docker image
+          echo "Building carbon-kepler-mcp Docker image..."
+          docker build -t carbon-kepler-mcp:latest .
+
+          # Import into K3s containerd
+          echo "Importing image into K3s containerd..."
+          docker save carbon-kepler-mcp:latest | k3s ctr images import -
+
+          # Create namespace
+          kubectl create namespace carbon-mcp || true
+
+          # Deploy MCP server
+          echo "Deploying MCP server to Kubernetes..."
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+          # Wait for MCP server to be ready
+          echo "Waiting for MCP server to be ready..."
+          kubectl wait --for=condition=ready pod -l app=carbon-mcp-server -n carbon-mcp --timeout=300s
+
+          echo "MCP Server deployed successfully!"
+          kubectl get pods -n carbon-mcp -o wide
+
           echo ""
           echo "========================================="
           echo "✅ Setup Complete!"
@@ -617,46 +572,116 @@ Resources:
           echo "Kepler Status:"
           kubectl get pods -n kepler-system
           echo ""
-          echo "Model Server Status:"
-          kubectl get pods -n kepler-model-server
+          echo "Test Workloads:"
+          kubectl get pods -n workload-test
+          echo ""
+          echo "MCP Server:"
+          kubectl get pods -n carbon-mcp
+          echo ""
+          echo "RAPL Status:"
+          echo "  Checking RAPL zones..."
+          ls -la /sys/class/powercap/ | grep intel-rapl || echo "  ⚠️  RAPL zones not visible (check logs)"
           echo ""
           echo "Access Metrics:"
           INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
           echo "  HTTPS: curl -k https://$INSTANCE_IP:30443/metrics"
           echo "  HTTP:  curl http://$INSTANCE_IP:30080/metrics"
+          echo "  MCP SSE: curl -N http://$INSTANCE_IP:30800/sse"
           echo ""
           echo "Deployment Summary saved to: /home/ubuntu/kepler-info.txt"
 
           # Save deployment info
           cat > /home/ubuntu/kepler-info.txt << EOFINFO
-          Kepler Deployment Information
-          ==============================
+          Kepler + MCP Deployment Information for Open Source Summit Korea 2025
+          ======================================================================
 
           Instance IP: $INSTANCE_IP
 
-          HTTPS Metrics: https://$INSTANCE_IP:30443/metrics
-          HTTP Metrics:  http://$INSTANCE_IP:30080/metrics
+          Endpoints:
+          ----------
+          Kepler HTTPS Metrics: https://$INSTANCE_IP:30443/metrics
+          Kepler HTTP Metrics:  http://$INSTANCE_IP:30080/metrics
+          MCP SSE Endpoint:     http://$INSTANCE_IP:30800/sse
 
-          Components:
-          - Kepler v0.11.2 (DaemonSet)
-          - Model Server (latest)
-          - HTTPS Proxy (Nginx)
-          - cert-manager v1.18.2
+          Components Deployed:
+          -------------------
+          1. Kepler v0.11.2 (Power Measurement)
+             - DaemonSet in kepler-system namespace
+             - Intel RAPL (Direct Hardware Power Measurements)
+             - HTTPS Proxy (Nginx with self-signed cert)
 
-          Configuration:
-          - Fake CPU meter: Enabled (for initialization)
-          - Model Server: Enabled (ML-based power estimation)
-          - Real metrics: eBPF CPU, memory, process tracking
+          2. Carbon-Kepler MCP Server
+             - FastMCP 2.12.5 (SSE Transport)
+             - Namespace: carbon-mcp
+             - 8 tools for carbon-aware workload compliance
+             - Korean Environmental Standards compliance checks
 
-          Access:
-          kubectl get pods -n kepler-system
-          kubectl get pods -n kepler-model-server
-          kubectl logs -n kepler-system -l app.kubernetes.io/name=kepler
-          kubectl logs -n kepler-model-server -l app.kubernetes.io/name=kepler-model-server
+          3. Test Workloads (workload-test namespace)
+             - nginx-light: Low-power web server (COMPLIANT)
+             - redis-cache: Medium-power cache (COMPLIANT)
+             - stress-cpu: High-power compute (2 replicas for testing)
 
-          Test metrics:
-          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_cpu_usage_ratio
-          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_cpu_watts
+          Power Measurement Configuration:
+          -------------------------------
+          - Method: RAPL (Intel Running Average Power Limit)
+          - RAPL Modules: msr, intel_rapl_common, intel_rapl_msr
+          - RAPL Zones: Auto-detected (package + dram)
+          - Metrics: procfs/sysfs CPU, memory, process tracking + RAPL energy
+          - Collection Interval: 5 seconds
+
+          Korean Environmental Standards:
+          ------------------------------
+          - 탄소중립 녹색성장 기본법: 424 gCO2eq/kWh
+          - 에너지이용 합리화법: PUE ≤ 1.4
+
+          Quick Access Commands:
+          ---------------------
+          # View all deployments
+          kubectl get pods -A
+
+          # Kepler metrics
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_package_energy_joule
+
+          # Test workloads
+          kubectl get pods -n workload-test -o wide
+
+          # MCP Server
+          kubectl get pods -n carbon-mcp
+          kubectl logs -n carbon-mcp -l app=carbon-mcp-server
+
+          # Test MCP SSE connection
+          curl -N -H "Accept: text/event-stream" http://$INSTANCE_IP:30800/sse
+
+          Verify RAPL Working:
+          -------------------
+          ls -la /sys/class/powercap/
+          lsmod | grep rapl
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep 'zone="package"'
+          curl -k -s https://$INSTANCE_IP:30443/metrics | grep 'zone="dram"'
+
+          Windows Claude Desktop Configuration:
+          ------------------------------------
+          1. Copy mcp-sse-bridge-windows.js to C:\\Users\\<username>\\
+          2. Update claude_desktop_config.json:
+          {
+            "mcpServers": {
+              "carbon-kepler": {
+                "command": "node",
+                "args": [
+                  "C:\\\\Users\\\\<username>\\\\mcp-sse-bridge-windows.js",
+                  "http://$INSTANCE_IP:30800/sse"
+                ]
+              }
+            }
+          }
+
+          Repository Location:
+          -------------------
+          /home/ubuntu/Open-source-Summit-Korea-2025/
+
+          MCP Server Code: carbon-kepler-mcp/
+          Test Workloads: carbon-kepler-mcp/k8s/test-workloads.yaml
+          Bridge Script: mcp-sse-bridge-windows.js
           EOFINFO
 
           chown ubuntu:ubuntu /home/ubuntu/kepler-info.txt
@@ -734,9 +759,17 @@ Outputs:
     Description: HTTP URL for Kepler metrics
     Value: !Sub 'http://${KeplerEIP}:30080/metrics'
 
+  MCPSSEEndpoint:
+    Description: MCP SSE endpoint for Claude Desktop integration
+    Value: !Sub 'http://${KeplerEIP}:30800/sse'
+
   TestCommand:
     Description: Test Kepler metrics endpoint
     Value: !Sub 'curl -k https://${KeplerEIP}:30443/metrics | grep kepler_node'
+
+  MCPTestCommand:
+    Description: Test MCP SSE connection
+    Value: !Sub 'curl -N -H "Accept: text/event-stream" http://${KeplerEIP}:30800/sse'
 
   SetupStatus:
     Description: How to check setup status
@@ -744,6 +777,25 @@ Outputs:
       SSH Command: ssh -i ${KeyName}.pem ubuntu@${KeplerEIP}
       Check logs: tail -f /var/log/user-data.log
       Deployment info: cat /home/ubuntu/kepler-info.txt
+
+  ComponentsDeployed:
+    Description: List of deployed components
+    Value: !Sub |
+      ✅ Kepler v0.11.2 with RAPL (kepler-system namespace)
+      ✅ Carbon-Kepler MCP Server with 8 tools (carbon-mcp namespace)
+      ✅ Test Workloads: nginx-light, redis-cache, stress-cpu (workload-test namespace)
+
+      MCP SSE Endpoint: http://${KeplerEIP}:30800/sse
+
+      Windows Claude Desktop Config:
+      {
+        "mcpServers": {
+          "carbon-kepler": {
+            "command": "node",
+            "args": ["C:\\Users\\<username>\\mcp-sse-bridge-windows.js", "http://${KeplerEIP}:30800/sse"]
+          }
+        }
+      }
 
   InstanceType:
     Description: Instance type used
