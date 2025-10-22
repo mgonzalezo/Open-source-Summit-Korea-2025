@@ -134,47 +134,72 @@ class KeplerClient:
         namespace: str = "default"
     ) -> Dict[str, float]:
         """
-        Get metrics for a specific pod
+        Get metrics for a specific pod (aggregated from container-level RAPL metrics)
 
         Args:
             pod_name: Pod name
             namespace: Kubernetes namespace
 
         Returns:
-            Dictionary of metric values
+            Dictionary of metric values with joules (cumulative counters)
+
+        Note: RAPL metrics are in joules (counters). To convert to watts:
+              watts = (joules_t2 - joules_t1) / (timestamp_t2 - timestamp_t1)
         """
         metrics = self.fetch_metrics()
 
-        # Kepler v0.11.2 uses pod_name and pod_namespace labels
+        # Kepler v0.11.2 with RAPL uses container-level metrics
+        # Labels: pod_name, pod_namespace, container_name
         labels = {"pod_name": pod_name, "pod_namespace": namespace}
 
         return {
-            "cpu_watts": get_metric_value(metrics, "kepler_pod_cpu_watts", labels),
-            "cpu_joules_total": get_metric_value(metrics, "kepler_pod_cpu_joules_total", labels),
-            # Note: Kepler v0.11.2 only exposes CPU metrics at pod level
-            # Memory, GPU, and other metrics are only available at container level
+            # Total energy (all components: CPU + DRAM + other)
+            "total_joules": aggregate_metrics(
+                metrics, "kepler_container_joules_total", labels, "sum"
+            ),
+            # CPU energy only
+            "cpu_joules_total": aggregate_metrics(
+                metrics, "kepler_container_cpu_joules_total", labels, "sum"
+            ),
+            # DRAM energy only
+            "dram_joules_total": aggregate_metrics(
+                metrics, "kepler_container_dram_joules_total", labels, "sum"
+            ),
+            # Package energy (CPU socket)
+            "package_joules_total": aggregate_metrics(
+                metrics, "kepler_container_package_joules_total", labels, "sum"
+            ),
         }
 
     def get_namespace_metrics(self, namespace: str = "default") -> Dict[str, float]:
         """
-        Get aggregated metrics for all pods in a namespace
+        Get aggregated metrics for all pods in a namespace (from RAPL container metrics)
 
         Args:
             namespace: Kubernetes namespace
 
         Returns:
-            Dictionary of aggregated metric values
+            Dictionary of aggregated metric values in joules (counters)
         """
         metrics = self.fetch_metrics()
 
-        # Kepler v0.11.2 uses pod_namespace label
+        # Kepler v0.11.2 uses pod_namespace label at container level
         labels = {"pod_namespace": namespace}
 
         return {
-            "total_cpu_watts": aggregate_metrics(
-                metrics, "kepler_pod_cpu_watts", labels, "sum"
+            # Total energy across all containers in namespace
+            "total_joules": aggregate_metrics(
+                metrics, "kepler_container_joules_total", labels, "sum"
             ),
-            # Note: Only CPU metrics available at pod level in Kepler v0.11.2
+            # CPU energy only
+            "cpu_joules_total": aggregate_metrics(
+                metrics, "kepler_container_cpu_joules_total", labels, "sum"
+            ),
+            # DRAM energy only
+            "dram_joules_total": aggregate_metrics(
+                metrics, "kepler_container_dram_joules_total", labels, "sum"
+            ),
+            # Pod count in namespace
             "pod_count": len(
                 set(m.labels.get("pod_name", "") for m in filter_metrics(metrics, labels=labels))
             ),
@@ -182,21 +207,37 @@ class KeplerClient:
 
     def get_node_metrics(self) -> Dict[str, float]:
         """
-        Get node-level metrics
+        Get node-level RAPL metrics
 
         Returns:
-            Dictionary of node metric values
+            Dictionary of node metric values in joules (counters)
+
+        Note: With RAPL, node metrics are cumulative energy counters.
+              Kepler exposes RAPL zones at node level.
         """
         metrics = self.fetch_metrics()
 
         return {
-            "cpu_watts": get_metric_value(metrics, "kepler_node_cpu_watts"),
-            "cpu_active_watts": get_metric_value(metrics, "kepler_node_cpu_active_watts"),
-            "cpu_idle_watts": get_metric_value(metrics, "kepler_node_cpu_idle_watts"),
-            "cpu_usage_ratio": get_metric_value(metrics, "kepler_node_cpu_usage_ratio"),
-            "cpu_joules_total": get_metric_value(metrics, "kepler_node_cpu_joules_total"),
-            # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics
-            # Memory and GPU metrics require hardware support (RAPL, NVIDIA, etc.)
+            # Platform/total energy (all RAPL zones combined)
+            "platform_joules_total": get_metric_value(
+                metrics, "kepler_node_platform_joules_total"
+            ),
+            # CPU package energy (socket-level)
+            "package_joules_total": get_metric_value(
+                metrics, "kepler_node_package_joules_total"
+            ),
+            # CPU core energy
+            "core_joules_total": get_metric_value(
+                metrics, "kepler_node_core_joules_total"
+            ),
+            # DRAM energy
+            "dram_joules_total": get_metric_value(
+                metrics, "kepler_node_dram_joules_total"
+            ),
+            # Uncore energy (shared components)
+            "uncore_joules_total": get_metric_value(
+                metrics, "kepler_node_uncore_joules_total"
+            ),
         }
 
     def list_pods(self, namespace: Optional[str] = None) -> List[Dict[str, str]]:
@@ -225,21 +266,64 @@ class KeplerClient:
             for pod, ns in sorted(pods)
         ]
 
-    def get_total_power(self, namespace: Optional[str] = None) -> float:
+    def calculate_power_from_energy(
+        self,
+        energy_joules_t1: float,
+        energy_joules_t2: float,
+        time_seconds: float
+    ) -> float:
         """
-        Get total power consumption
+        Calculate power (watts) from energy delta over time
+
+        Args:
+            energy_joules_t1: Energy at time t1 (joules)
+            energy_joules_t2: Energy at time t2 (joules)
+            time_seconds: Time interval between measurements (seconds)
+
+        Returns:
+            Average power consumption in watts
+
+        Formula: watts = (joules_t2 - joules_t1) / time_seconds
+        """
+        if time_seconds <= 0:
+            logger.warning("calculate_power_invalid_time", time_seconds=time_seconds)
+            return 0.0
+
+        energy_delta = energy_joules_t2 - energy_joules_t1
+
+        if energy_delta < 0:
+            logger.warning(
+                "calculate_power_negative_delta",
+                t1=energy_joules_t1,
+                t2=energy_joules_t2
+            )
+            return 0.0
+
+        watts = energy_delta / time_seconds
+        logger.debug(
+            "power_calculated",
+            energy_delta_joules=energy_delta,
+            time_seconds=time_seconds,
+            watts=watts
+        )
+
+        return watts
+
+    def get_total_power(self, namespace: Optional[str] = None) -> Dict[str, float]:
+        """
+        Get total energy consumption in joules (counters)
+
+        Note: This returns joules, not watts. To get watts, you need to:
+        1. Call this method twice with a time interval
+        2. Use calculate_power_from_energy() to convert to watts
 
         Args:
             namespace: Limit to specific namespace (optional)
 
         Returns:
-            Total power in watts
+            Dictionary with energy metrics in joules
         """
         if namespace:
-            ns_metrics = self.get_namespace_metrics(namespace)
-            # Kepler v0.11.2 only provides CPU watts at pod level
-            return ns_metrics.get("total_cpu_watts", 0.0)
+            return self.get_namespace_metrics(namespace)
         else:
-            node_metrics = self.get_node_metrics()
-            # Return total node CPU power
-            return node_metrics.get("cpu_watts", 0.0)
+            return self.get_node_metrics()

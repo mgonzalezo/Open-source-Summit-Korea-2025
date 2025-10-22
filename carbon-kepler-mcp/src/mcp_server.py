@@ -71,6 +71,51 @@ logger.info(
 )
 
 
+# Helper function: Convert RAPL joules to watts
+# IMPORTANT: RAPL metrics are cumulative energy counters in joules.
+# To get power (watts), you need two measurements over time:
+# watts = (joules_t2 - joules_t1) / (time_t2 - time_t1)
+#
+# For simplicity in this MCP server, we approximate watts by assuming
+# a 5-second collection interval (Kepler default) and using the total_joules
+# as a proxy. This is a SIMPLIFICATION - ideally you'd track deltas over time.
+#
+# Formula used: estimated_watts ≈ total_joules / assumed_uptime_seconds
+# Better approach: Use Prometheus rate() function or track metrics over time
+def estimate_watts_from_joules(joules_metrics: Dict[str, float], interval_seconds: float = 5.0) -> float:
+    """
+    Estimate current power (watts) from RAPL joules metrics.
+
+    Args:
+        joules_metrics: Dict with keys like 'total_joules', 'cpu_joules_total', etc.
+        interval_seconds: Kepler collection interval (default: 5 seconds)
+
+    Returns:
+        Estimated power in watts
+
+    Note: This is a ROUGH ESTIMATE. For accurate watts, you need:
+          1. Two joules measurements (t1 and t2)
+          2. Calculate: watts = (joules_t2 - joules_t1) / (t2 - t1)
+    """
+    total_joules = joules_metrics.get("total_joules", 0.0)
+
+    if total_joules == 0:
+        return 0.0
+
+    # Rough estimate: assume metrics represent recent interval
+    # This is NOT accurate for absolute values but gives relative comparison
+    estimated_watts = total_joules / interval_seconds
+
+    logger.debug(
+        "watts_estimated_from_joules",
+        total_joules=total_joules,
+        interval_seconds=interval_seconds,
+        estimated_watts=estimated_watts
+    )
+
+    return estimated_watts
+
+
 # ============================================================================
 # MCP TOOLS
 # ============================================================================

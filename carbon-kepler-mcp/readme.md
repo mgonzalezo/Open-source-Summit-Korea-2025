@@ -106,7 +106,7 @@ This MCP server provides tools for assessing Kubernetes workload compliance with
 | Direction | Server → Client | Bidirectional | Client → Server |
 | Protocol | HTTP | TCP | HTTP |
 | Complexity | Low | Medium | Low |
-| Firewall | ✅ Easy | ⚠️ Sometimes blocked | ✅ Easy |
+| Firewall | Easy | Sometimes blocked | Easy |
 | Use case | Real-time updates | Chat, games | Simple requests |
 
 **Our Implementation:**
@@ -189,7 +189,7 @@ Primary compliance check for a single workload.
   "pue_status": "COMPLIANT",
   "current_carbon_intensity_gCO2eq_kWh": 510,
   "target_carbon_intensity_gCO2eq_kWh": 424,
-  "recommendation": "️ NON-COMPLIANT: Workload exceeds...",
+  "recommendation": "NON-COMPLIANT: Workload exceeds...",
   "optimizations": [...]
 }
 ```
