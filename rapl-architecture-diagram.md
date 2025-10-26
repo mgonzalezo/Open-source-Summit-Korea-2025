@@ -100,7 +100,7 @@
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  Host OS: Ubuntu 24.04 (bare-metal, NOT virtualized!)                │  │
+│  │  Host OS: Linux (bare-metal, NOT virtualized!)                        │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
 │  │  │  Intel RAPL Kernel Modules (loaded at boot)                    │  │  │
 │  │  │  ┌───────────────────────────────────────────────────────────┐  │  │  │
@@ -267,6 +267,55 @@ if [ -d "/sys/class/powercap/intel-rapl:0" ]; then
 fi
 ```
 
+### AWS Bare-Metal RAPL Workaround
+
+**Important**: This workaround is critical for enabling RAPL on AWS bare-metal instances (c5.metal, m5.metal, r5.metal).
+
+**Source**: Adapted from [Kepler Model Training Playbook](https://github.com/sustainable-computing-io/kepler-model-training-playbook/blob/main/roles/instance_collect_role/files/install_package.sh)
+
+**The Issue**: On AWS bare-metal instances, RAPL modules are not loaded by default, preventing Kepler from accessing hardware energy counters.
+
+**The Solution**:
+```bash
+# Step 1: Install kernel modules (CRITICAL)
+apt-get install -y linux-modules-$(uname -r) linux-modules-extra-$(uname -r)
+
+# Step 2: Load RAPL modules in CORRECT ORDER
+modprobe msr                   # Model-Specific Registers (provides /dev/cpu/*/msr)
+modprobe intel_rapl_common     # RAPL common infrastructure
+modprobe intel_rapl_msr        # RAPL MSR interface (THE CRITICAL MODULE!)
+
+# Step 3: Persist modules across reboots
+echo "msr" >> /etc/modules
+echo "intel_rapl_common" >> /etc/modules
+echo "intel_rapl_msr" >> /etc/modules
+
+# Step 4: Verify RAPL zones are exposed
+ls -la /sys/class/powercap/intel-rapl:*
+# Expected output:
+# intel-rapl:0      (package-0)
+# intel-rapl:1      (package-1)
+# intel-rapl:0:0    (dram-0)
+# intel-rapl:1:0    (dram-1)
+```
+
+**Why This Workaround is Necessary**:
+- AWS bare-metal instances use a minimal kernel configuration
+- RAPL kernel modules exist but are not loaded by default
+- `intel_rapl_msr` module creates `/sys/class/powercap/` entries that Kepler reads
+- Without this, Kepler falls back to model-based estimation (less accurate)
+
+**Verification**:
+```bash
+# Check modules are loaded
+lsmod | grep rapl
+# Should show: intel_rapl_msr, intel_rapl_common, msr
+
+# Check RAPL zones are accessible
+cat /sys/class/powercap/intel-rapl:0/energy_uj
+# Should return: microjoules value (e.g., 123456789012)
+```
+
 ### Kepler Helm Values (RAPL Configuration)
 
 ```yaml
@@ -317,7 +366,7 @@ curl -k https://<IP>:30443/metrics | grep kepler_node_package_energy_joule
 ```
 CloudFormation Stack: kepler-k3s-rapl
 ├── EC2 Instance: c5.metal
-│   ├── OS: Ubuntu 24.04 (bare-metal)
+│   ├── OS: Linux (bare-metal)
 │   ├── RAPL Modules: msr, intel_rapl_common, intel_rapl_msr
 │   └── K3s: Lightweight Kubernetes
 │
