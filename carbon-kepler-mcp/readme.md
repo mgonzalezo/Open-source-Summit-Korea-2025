@@ -53,12 +53,15 @@ This MCP server provides tools for assessing Kubernetes workload compliance with
 │  │  │  • Protocol: JSON-RPC 2.0 over SSE                        │  │  │
 │  │  └───────────────────────────────────────────────────────────┘  │  │
 │  │  ┌───────────────────────────────────────────────────────────┐  │  │
-│  │  │  5 MCP Tools:                                             │  │  │
+│  │  │  8 MCP Tools:                                             │  │  │
 │  │  │  • assess_workload_compliance                             │  │  │
 │  │  │  • compare_optimization_impact                            │  │  │
 │  │  │  • list_workloads_by_compliance                           │  │  │
 │  │  │  • get_regional_comparison                                │  │  │
 │  │  │  • calculate_optimal_schedule                             │  │  │
+│  │  │  • identify_power_hotspots                                │  │  │
+│  │  │  • list_top_power_consumers                               │  │  │
+│  │  │  • get_power_consumption_summary                          │  │  │
 │  │  └───────────────────────────────────────────────────────────┘  │  │
 │  │                        ↓                                          │  │
 │  │  ┌───────────────────────────────────────────────────────────┐  │  │
@@ -239,6 +242,40 @@ Find optimal time window for workload scheduling.
   "workload_name": "ml-training-job",
   "duration_hours": 4,
   "region": "ap-northeast-2"
+}
+```
+
+### 6. `identify_power_hotspots`
+
+Identify high-power consuming containers/pods and recommend preventive actions.
+
+```json
+{
+  "namespace": "production",
+  "power_threshold_watts": 1.0,
+  "include_compliance_check": true
+}
+```
+
+### 7. `list_top_power_consumers`
+
+List top power-consuming workloads ranked by power usage or efficiency.
+
+```json
+{
+  "namespace": "default",
+  "limit": 10,
+  "sort_by": "power"
+}
+```
+
+### 8. `get_power_consumption_summary`
+
+Get overall power consumption summary for namespace or entire cluster.
+
+```json
+{
+  "namespace": "production"
 }
 ```
 

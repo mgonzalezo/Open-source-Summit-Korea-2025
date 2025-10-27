@@ -88,7 +88,7 @@ cd aws-deployment
 This will automatically deploy:
 
 - AWS c5.metal bare-metal instance (ap-northeast-1)
-- Intel RAPL kernel modules (msr, intel_rapl_common, intel_rapl_msr)
+- Intel RAPL kernel modules (msr, intel_rapl_common, intel_rapl_msr) - with AWS workaround
 - K3s Kubernetes cluster
 - Kepler v0.11.2 with RAPL (4 zones)
 - Carbon-Kepler MCP Server (8 tools)
@@ -191,6 +191,8 @@ Open Claude Desktop and try:
 - **Real measurements**: Direct hardware energy consumption
 - **Production accuracy**: Suitable for compliance reporting
 - **4 RAPL Zones**: Complete visibility into CPU package and DRAM energy consumption
+
+**Important**: AWS bare-metal instances require a workaround to enable RAPL. See [RAPL Workaround Documentation](rapl-architecture-diagram.md#aws-bare-metal-rapl-workaround) for the critical module loading steps adapted from the [Kepler Model Training Playbook](https://github.com/sustainable-computing-io/kepler-model-training-playbook/blob/main/roles/instance_collect_role/files/install_package.sh).
 
 ## Power Measurement Flow
 

@@ -9,8 +9,8 @@ set -e
 # Configuration
 STACK_NAME="kepler-k3s-rapl"
 REGION="ap-northeast-1"
-PROFILE="${AWS_PROFILE:-mgonzalezo}"
-KEY_NAME="oss-korea"
+PROFILE="${AWS_PROFILE:-default}"
+KEY_NAME="oss-korea-ap"
 INSTANCE_TYPE="c5.metal"
 VOLUME_SIZE="100"
 AUTO_INSTALL="true"  # Set to "false" to manually run setup
