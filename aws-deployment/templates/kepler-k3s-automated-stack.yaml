@@ -506,40 +506,197 @@ Resources:
           # Wait for HTTPS proxy
           kubectl wait --for=condition=ready pod -l app=kepler-https-proxy -n kepler-system --timeout=300s
 
-          # Clone the repository for MCP server and test workloads
+          # Deploy demo workloads for power consumption testing
           echo ""
           echo "========================================="
-          echo "Cloning Open Source Summit Korea 2025 repository..."
+          echo "Deploying demo workloads for compliance testing..."
           echo "========================================="
-          cd /home/ubuntu
-          if [ -d "Open-source-Summit-Korea-2025" ]; then
-            rm -rf Open-source-Summit-Korea-2025
-          fi
-          git clone https://github.com/marcosgonzalezo/Open-source-Summit-Korea-2025.git
-          chown -R ubuntu:ubuntu Open-source-Summit-Korea-2025
 
-          # Deploy test workloads for compliance demonstrations
+          # Create demo-workloads namespace
+          kubectl create namespace demo-workloads || true
+
+          # Create demo workloads manifest inline
+          cat > /tmp/demo-workloads.yaml << 'EOFDEMO'
+          ---
+          # High CPU workload - crypto mining simulation
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: crypto-miner-simulation
+            namespace: demo-workloads
+          spec:
+            replicas: 3
+            selector:
+              matchLabels:
+                app: crypto-miner
+            template:
+              metadata:
+                labels:
+                  app: crypto-miner
+                  power-profile: high
+              spec:
+                containers:
+                - name: stress
+                  image: polinux/stress
+                  resources:
+                    requests:
+                      cpu: "500m"
+                      memory: "256Mi"
+                    limits:
+                      cpu: "1000m"
+                      memory: "512Mi"
+                  command: ["stress"]
+                  args: ["--cpu", "2", "--timeout", "0"]
+          ---
+          # High power CPU burner
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: high-power-cpu-burner
+            namespace: demo-workloads
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: cpu-burner
+            template:
+              metadata:
+                labels:
+                  app: cpu-burner
+                  power-profile: very-high
+              spec:
+                containers:
+                - name: stress
+                  image: polinux/stress
+                  resources:
+                    requests:
+                      cpu: "800m"
+                      memory: "512Mi"
+                    limits:
+                      cpu: "1500m"
+                      memory: "1Gi"
+                  command: ["stress"]
+                  args: ["--cpu", "4", "--vm", "2", "--vm-bytes", "256M", "--timeout", "0"]
+          ---
+          # Memory intensive workload
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: memory-intensive-app
+            namespace: demo-workloads
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: memory-app
+            template:
+              metadata:
+                labels:
+                  app: memory-app
+                  power-profile: medium
+              spec:
+                containers:
+                - name: stress
+                  image: polinux/stress
+                  resources:
+                    requests:
+                      cpu: "200m"
+                      memory: "512Mi"
+                    limits:
+                      cpu: "500m"
+                      memory: "1Gi"
+                  command: ["stress"]
+                  args: ["--vm", "4", "--vm-bytes", "200M", "--timeout", "0"]
+          ---
+          # Inefficient algorithm simulation
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: inefficient-fibonacci
+            namespace: demo-workloads
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: fibonacci
+            template:
+              metadata:
+                labels:
+                  app: fibonacci
+                  power-profile: medium-high
+              spec:
+                containers:
+                - name: stress
+                  image: polinux/stress
+                  resources:
+                    requests:
+                      cpu: "400m"
+                      memory: "256Mi"
+                    limits:
+                      cpu: "800m"
+                      memory: "512Mi"
+                  command: ["stress"]
+                  args: ["--cpu", "3", "--timeout", "0"]
+          ---
+          # Low power idle workload
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: nginx-light
+            namespace: demo-workloads
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: nginx-light
+            template:
+              metadata:
+                labels:
+                  app: nginx-light
+                  power-profile: low
+              spec:
+                containers:
+                - name: nginx
+                  image: nginx:alpine
+                  resources:
+                    requests:
+                      cpu: "50m"
+                      memory: "64Mi"
+                    limits:
+                      cpu: "100m"
+                      memory: "128Mi"
+          EOFDEMO
+
+          kubectl apply -f /tmp/demo-workloads.yaml
+          echo "Demo workloads deployed in demo-workloads namespace"
+          kubectl get pods -n demo-workloads -o wide
+
+          # Build and deploy Carbon-Kepler MCP Server (without git clone)
           echo ""
           echo "========================================="
-          echo "Deploying test workloads for compliance demos..."
-          echo "========================================="
-          kubectl apply -f /home/ubuntu/Open-source-Summit-Korea-2025/carbon-kepler-mcp/k8s/test-workloads.yaml
-
-          echo "Waiting for test workloads to be ready..."
-          kubectl wait --for=condition=ready pod -l app=nginx-light -n workload-test --timeout=120s || true
-          kubectl wait --for=condition=ready pod -l app=redis-cache -n workload-test --timeout=120s || true
-          kubectl wait --for=condition=ready pod -l app=stress-cpu -n workload-test --timeout=120s || true
-
-          echo "Test workloads deployed:"
-          kubectl get pods -n workload-test -o wide
-
-          # Build and deploy Carbon-Kepler MCP Server
-          echo ""
-          echo "========================================="
-          echo "Building and deploying Carbon-Kepler MCP Server..."
+          echo "Building Carbon-Kepler MCP Server..."
           echo "========================================="
 
-          cd /home/ubuntu/Open-source-Summit-Korea-2025/carbon-kepler-mcp
+          # Create MCP server directory structure
+          mkdir -p /home/ubuntu/carbon-kepler-mcp/src
+          cd /home/ubuntu/carbon-kepler-mcp
+
+          # Download MCP server source files directly from GitHub
+          echo "Downloading MCP server source code..."
+          MCP_REPO="https://raw.githubusercontent.com/marcosgonzalezo/Open-source-Summit-Korea-2025/main"
+
+          # Download requirements.txt
+          curl -sL "$MCP_REPO/carbon-kepler-mcp/requirements.txt" -o requirements.txt
+
+          # Download Dockerfile
+          curl -sL "$MCP_REPO/carbon-kepler-mcp/Dockerfile" -o Dockerfile
+
+          # Download Python source files
+          curl -sL "$MCP_REPO/carbon-kepler-mcp/src/__init__.py" -o src/__init__.py
+          curl -sL "$MCP_REPO/carbon-kepler-mcp/src/mcp_server.py" -o src/mcp_server.py
+          curl -sL "$MCP_REPO/carbon-kepler-mcp/src/kepler_client.py" -o src/kepler_client.py
+          curl -sL "$MCP_REPO/carbon-kepler-mcp/src/carbon_calculator.py" -o src/carbon_calculator.py
+          curl -sL "$MCP_REPO/carbon-kepler-mcp/src/power_hotspot_tools.py" -o src/power_hotspot_tools.py
 
           # Build Docker image
           echo "Building carbon-kepler-mcp Docker image..."
@@ -549,13 +706,182 @@ Resources:
           echo "Importing image into K3s containerd..."
           docker save carbon-kepler-mcp:latest | k3s ctr images import -
 
+          # Deploy MCP server with inline Kubernetes manifests
+          echo ""
+          echo "========================================="
+          echo "Deploying MCP server to Kubernetes..."
+          echo "========================================="
+
           # Create namespace
           kubectl create namespace carbon-mcp || true
 
-          # Deploy MCP server
-          echo "Deploying MCP server to Kubernetes..."
-          kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/service.yaml
+          # Create ConfigMap
+          cat > /tmp/mcp-configmap.yaml << 'EOFCM'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: korea-compliance-data
+            namespace: carbon-mcp
+            labels:
+              app: carbon-mcp-server
+          data:
+            carbon-intensity.json: |
+              {
+                "region": "ap-northeast-2",
+                "region_name": "Seoul, Korea",
+                "average_gCO2eq_kWh": 424,
+                "grid_mix": {
+                  "coal": 35,
+                  "natural_gas": 28,
+                  "nuclear": 25,
+                  "renewable": 12
+                },
+                "cleanest_hours": [2, 3, 4],
+                "dirtiest_hours": [12, 13, 14, 15, 16]
+              }
+            regulations.json: |
+              {
+                "korea_carbon_neutrality": {
+                  "code": "KR_CARBON_2050",
+                  "name": "Framework Act on Carbon Neutrality and Green Growth",
+                  "name_local": "탄소중립 녹색성장 기본법",
+                  "target_year": 2050,
+                  "grid_carbon_intensity_gco2_kwh": 424
+                },
+                "korea_pue_standard": {
+                  "code": "KR_PUE_GREEN_DC",
+                  "name": "Energy Use Rationalization Act - Green Data Center",
+                  "name_local": "에너지이용 합리화법 - 그린 데이터센터",
+                  "target_pue": 1.4
+                }
+              }
+            regions.json: |
+              {
+                "ap-northeast-2": {"average_gco2_kwh": 424, "region_name": "Seoul, Korea"},
+                "us-east-1": {"average_gco2_kwh": 450, "region_name": "Virginia, USA"},
+                "eu-north-1": {"average_gco2_kwh": 50, "region_name": "Stockholm, Sweden"}
+              }
+          EOFCM
+
+          kubectl apply -f /tmp/mcp-configmap.yaml
+
+          # Create RBAC
+          cat > /tmp/mcp-rbac.yaml << 'EOFRBAC'
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: carbon-mcp-sa
+            namespace: carbon-mcp
+            labels:
+              app: carbon-mcp-server
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: carbon-mcp-cluster-reader
+          rules:
+          - apiGroups: [""]
+            resources: ["pods", "namespaces", "nodes"]
+            verbs: ["get", "list"]
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: carbon-mcp-cluster-reader-binding
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: carbon-mcp-cluster-reader
+          subjects:
+          - kind: ServiceAccount
+            name: carbon-mcp-sa
+            namespace: carbon-mcp
+          EOFRBAC
+
+          kubectl apply -f /tmp/mcp-rbac.yaml
+
+          # Create Deployment
+          cat > /tmp/mcp-deployment.yaml << 'EOFDEPLOY'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: carbon-mcp-server
+            namespace: carbon-mcp
+            labels:
+              app: carbon-mcp-server
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: carbon-mcp-server
+            template:
+              metadata:
+                labels:
+                  app: carbon-mcp-server
+              spec:
+                serviceAccountName: carbon-mcp-sa
+                containers:
+                - name: mcp-server
+                  image: docker.io/library/carbon-kepler-mcp:latest
+                  imagePullPolicy: Never
+                  ports:
+                  - containerPort: 8000
+                    name: http
+                    protocol: TCP
+                  env:
+                  - name: KEPLER_ENDPOINT
+                    value: "http://kepler.kepler-system.svc.cluster.local:28282/metrics"
+                  - name: KOREA_CARBON_INTENSITY
+                    value: "424"
+                  - name: KOREA_PUE_TARGET
+                    value: "1.4"
+                  - name: PYTHONUNBUFFERED
+                    value: "1"
+                  - name: MCP_TRANSPORT
+                    value: "sse"
+                  - name: PORT
+                    value: "8000"
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 128Mi
+                    limits:
+                      cpu: 500m
+                      memory: 512Mi
+                  volumeMounts:
+                  - name: compliance-data
+                    mountPath: /app/config
+                    readOnly: true
+                volumes:
+                - name: compliance-data
+                  configMap:
+                    name: korea-compliance-data
+          EOFDEPLOY
+
+          kubectl apply -f /tmp/mcp-deployment.yaml
+
+          # Create Service
+          cat > /tmp/mcp-service.yaml << 'EOFSVC'
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: carbon-mcp-server
+            namespace: carbon-mcp
+            labels:
+              app: carbon-mcp-server
+          spec:
+            type: NodePort
+            selector:
+              app: carbon-mcp-server
+            ports:
+            - name: http
+              port: 8000
+              targetPort: 8000
+              nodePort: 30800
+              protocol: TCP
+          EOFSVC
+
+          kubectl apply -f /tmp/mcp-service.yaml
 
           # Wait for MCP server to be ready
           echo "Waiting for MCP server to be ready..."
@@ -572,8 +898,8 @@ Resources:
           echo "Kepler Status:"
           kubectl get pods -n kepler-system
           echo ""
-          echo "Test Workloads:"
-          kubectl get pods -n workload-test
+          echo "Demo Workloads:"
+          kubectl get pods -n demo-workloads
           echo ""
           echo "MCP Server:"
           kubectl get pods -n carbon-mcp
@@ -616,10 +942,12 @@ Resources:
              - 8 tools for carbon-aware workload compliance
              - Korean Environmental Standards compliance checks
 
-          3. Test Workloads (workload-test namespace)
-             - nginx-light: Low-power web server (COMPLIANT)
-             - redis-cache: Medium-power cache (COMPLIANT)
-             - stress-cpu: High-power compute (2 replicas for testing)
+          3. Demo Workloads (demo-workloads namespace)
+             - crypto-miner-simulation: High CPU workload (3 replicas)
+             - high-power-cpu-burner: Very high power workload (2 replicas)
+             - memory-intensive-app: Memory-heavy workload (2 replicas)
+             - inefficient-fibonacci: Medium-high CPU workload (1 replica)
+             - nginx-light: Low-power web server (2 replicas)
 
           Power Measurement Configuration:
           -------------------------------
@@ -642,8 +970,8 @@ Resources:
           # Kepler metrics
           curl -k -s https://$INSTANCE_IP:30443/metrics | grep kepler_node_package_energy_joule
 
-          # Test workloads
-          kubectl get pods -n workload-test -o wide
+          # Demo workloads
+          kubectl get pods -n demo-workloads -o wide
 
           # MCP Server
           kubectl get pods -n carbon-mcp
@@ -675,13 +1003,12 @@ Resources:
             }
           }
 
-          Repository Location:
-          -------------------
-          /home/ubuntu/Open-source-Summit-Korea-2025/
-
-          MCP Server Code: carbon-kepler-mcp/
-          Test Workloads: carbon-kepler-mcp/k8s/test-workloads.yaml
-          Bridge Script: mcp-sse-bridge-windows.js
+          Deployment Notes:
+          ----------------
+          - MCP Server source downloaded directly from GitHub (no git clone needed)
+          - MCP Server Code: /home/ubuntu/carbon-kepler-mcp/
+          - Demo Workloads: Inline manifests (demo-workloads namespace)
+          - All Kubernetes manifests embedded in CloudFormation template
           EOFINFO
 
           chown ubuntu:ubuntu /home/ubuntu/kepler-info.txt
@@ -783,7 +1110,7 @@ Outputs:
     Value: !Sub |
       ✅ Kepler v0.11.2 with RAPL (kepler-system namespace)
       ✅ Carbon-Kepler MCP Server with 8 tools (carbon-mcp namespace)
-      ✅ Test Workloads: nginx-light, redis-cache, stress-cpu (workload-test namespace)
+      ✅ Demo Workloads: 5 deployments with varying power profiles (demo-workloads namespace)
 
       MCP SSE Endpoint: http://${KeplerEIP}:30800/sse
 

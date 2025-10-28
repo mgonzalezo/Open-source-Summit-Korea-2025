@@ -73,6 +73,10 @@ class KeplerClient:
         self.timeout = timeout
         self.cache = KeplerMetricsCache(ttl_seconds=cache_ttl)
 
+        # Power measurement cache: stores (timestamp, joules) for power calculation
+        # Key format: "pod:{namespace}/{pod_name}" or "namespace:{namespace}"
+        self._power_measurement_cache: Dict[str, tuple[datetime, float]] = {}
+
         logger.info(
             "kepler_client_initialized",
             endpoint=self.endpoint,
@@ -148,27 +152,163 @@ class KeplerClient:
         """
         metrics = self.fetch_metrics()
 
-        # Kepler v0.11.2 with RAPL uses container-level metrics
-        # Labels: pod_name, pod_namespace, container_name
+        # Kepler v0.11.2 with RAPL uses pod-level metrics with zone labels
+        # Metrics: kepler_pod_cpu_joules_total{zone="package"|"dram"}
         labels = {"pod_name": pod_name, "pod_namespace": namespace}
 
+        # Get package (CPU) energy
+        package_labels = {**labels, "zone": "package"}
+        package_joules = aggregate_metrics(
+            metrics, "kepler_pod_cpu_joules_total", package_labels, "sum"
+        )
+
+        # Get DRAM energy
+        dram_labels = {**labels, "zone": "dram"}
+        dram_joules = aggregate_metrics(
+            metrics, "kepler_pod_cpu_joules_total", dram_labels, "sum"
+        )
+
+        # Total is sum of all zones
+        total_joules = package_joules + dram_joules
+
         return {
-            # Total energy (all components: CPU + DRAM + other)
-            "total_joules": aggregate_metrics(
-                metrics, "kepler_container_joules_total", labels, "sum"
-            ),
-            # CPU energy only
-            "cpu_joules_total": aggregate_metrics(
-                metrics, "kepler_container_cpu_joules_total", labels, "sum"
-            ),
-            # DRAM energy only
-            "dram_joules_total": aggregate_metrics(
-                metrics, "kepler_container_dram_joules_total", labels, "sum"
-            ),
-            # Package energy (CPU socket)
-            "package_joules_total": aggregate_metrics(
-                metrics, "kepler_container_package_joules_total", labels, "sum"
-            ),
+            # Total energy (sum of all zones)
+            "total_joules": total_joules,
+            # CPU package energy (socket)
+            "cpu_joules_total": package_joules,
+            # DRAM energy
+            "dram_joules_total": dram_joules,
+            # Package energy (same as cpu_joules_total for compatibility)
+            "package_joules_total": package_joules,
+        }
+
+    def get_pod_power_watts(
+        self,
+        pod_name: str,
+        namespace: str = "default",
+        measurement_interval_seconds: float = 5.0
+    ) -> Dict[str, float]:
+        """
+        Get pod power consumption in watts by calculating delta from previous measurement.
+
+        This method stores the previous joule measurement and calculates power by:
+        watts = (joules_t2 - joules_t1) / (time_t2 - time_t1)
+
+        On first call for a pod, it returns 0.0 and stores the measurement.
+        On subsequent calls, it returns the calculated power.
+
+        Args:
+            pod_name: Pod name
+            namespace: Kubernetes namespace
+            measurement_interval_seconds: Minimum interval between measurements (default: 5s)
+
+        Returns:
+            Dictionary with power metrics in watts:
+            - cpu_watts: CPU power consumption
+            - dram_watts: DRAM power consumption
+            - total_watts: Total power (CPU + DRAM)
+        """
+        cache_key = f"pod:{namespace}/{pod_name}"
+        current_time = datetime.now()
+
+        # Get current energy measurement
+        current_metrics = self.get_pod_metrics(pod_name, namespace)
+        current_total_joules = current_metrics.get("total_joules", 0.0)
+        current_cpu_joules = current_metrics.get("cpu_joules_total", 0.0)
+        current_dram_joules = current_metrics.get("dram_joules_total", 0.0)
+
+        # Check if we have a previous measurement
+        if cache_key not in self._power_measurement_cache:
+            # First measurement - store and return 0
+            self._power_measurement_cache[cache_key] = (
+                current_time,
+                {
+                    "total_joules": current_total_joules,
+                    "cpu_joules": current_cpu_joules,
+                    "dram_joules": current_dram_joules
+                }
+            )
+            logger.debug(
+                "power_first_measurement",
+                pod=pod_name,
+                namespace=namespace,
+                joules=current_total_joules
+            )
+            return {
+                "cpu_watts": 0.0,
+                "dram_watts": 0.0,
+                "total_watts": 0.0,
+                "measurement_status": "initializing"
+            }
+
+        # Get previous measurement
+        prev_time, prev_metrics = self._power_measurement_cache[cache_key]
+        time_delta_seconds = (current_time - prev_time).total_seconds()
+
+        # Check if enough time has elapsed
+        if time_delta_seconds < measurement_interval_seconds:
+            logger.debug(
+                "power_measurement_too_soon",
+                pod=pod_name,
+                elapsed=time_delta_seconds,
+                required=measurement_interval_seconds
+            )
+            # Return cached calculation or 0 if too soon
+            return {
+                "cpu_watts": 0.0,
+                "dram_watts": 0.0,
+                "total_watts": 0.0,
+                "measurement_status": "waiting_for_interval"
+            }
+
+        # Calculate power from energy delta
+        prev_total_joules = prev_metrics["total_joules"]
+        prev_cpu_joules = prev_metrics["cpu_joules"]
+        prev_dram_joules = prev_metrics["dram_joules"]
+
+        total_watts = self.calculate_power_from_energy(
+            prev_total_joules,
+            current_total_joules,
+            time_delta_seconds
+        )
+
+        cpu_watts = self.calculate_power_from_energy(
+            prev_cpu_joules,
+            current_cpu_joules,
+            time_delta_seconds
+        )
+
+        dram_watts = self.calculate_power_from_energy(
+            prev_dram_joules,
+            current_dram_joules,
+            time_delta_seconds
+        )
+
+        # Update cache with current measurement
+        self._power_measurement_cache[cache_key] = (
+            current_time,
+            {
+                "total_joules": current_total_joules,
+                "cpu_joules": current_cpu_joules,
+                "dram_joules": current_dram_joules
+            }
+        )
+
+        logger.debug(
+            "power_calculated_for_pod",
+            pod=pod_name,
+            namespace=namespace,
+            total_watts=total_watts,
+            cpu_watts=cpu_watts,
+            dram_watts=dram_watts,
+            time_delta=time_delta_seconds
+        )
+
+        return {
+            "cpu_watts": cpu_watts,
+            "dram_watts": dram_watts,
+            "total_watts": total_watts,
+            "measurement_status": "active"
         }
 
     def get_namespace_metrics(self, namespace: str = "default") -> Dict[str, float]:
@@ -183,22 +323,28 @@ class KeplerClient:
         """
         metrics = self.fetch_metrics()
 
-        # Kepler v0.11.2 uses pod_namespace label at container level
+        # Kepler v0.11.2 uses pod_namespace label at pod level with zones
         labels = {"pod_namespace": namespace}
 
+        # Get package (CPU) energy across all pods
+        package_labels = {**labels, "zone": "package"}
+        package_joules = aggregate_metrics(
+            metrics, "kepler_pod_cpu_joules_total", package_labels, "sum"
+        )
+
+        # Get DRAM energy across all pods
+        dram_labels = {**labels, "zone": "dram"}
+        dram_joules = aggregate_metrics(
+            metrics, "kepler_pod_cpu_joules_total", dram_labels, "sum"
+        )
+
         return {
-            # Total energy across all containers in namespace
-            "total_joules": aggregate_metrics(
-                metrics, "kepler_container_joules_total", labels, "sum"
-            ),
+            # Total energy across all pods in namespace
+            "total_joules": package_joules + dram_joules,
             # CPU energy only
-            "cpu_joules_total": aggregate_metrics(
-                metrics, "kepler_container_cpu_joules_total", labels, "sum"
-            ),
+            "cpu_joules_total": package_joules,
             # DRAM energy only
-            "dram_joules_total": aggregate_metrics(
-                metrics, "kepler_container_dram_joules_total", labels, "sum"
-            ),
+            "dram_joules_total": dram_joules,
             # Pod count in namespace
             "pod_count": len(
                 set(m.labels.get("pod_name", "") for m in filter_metrics(metrics, labels=labels))

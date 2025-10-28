@@ -152,14 +152,14 @@ async def assess_workload_compliance(
     )
 
     try:
-        # Fetch workload metrics from Kepler
-        pod_metrics = kepler_client.get_pod_metrics(workload_name, namespace)
+        # Fetch workload power metrics from Kepler (calculates watts from joule deltas)
+        pod_power = kepler_client.get_pod_power_watts(workload_name, namespace)
         node_metrics = kepler_client.get_node_metrics()
 
         # Create workload metrics object
         # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics at pod level
         workload_metrics = WorkloadMetrics(
-            cpu_watts=pod_metrics.get("cpu_watts", 0.0),
+            cpu_watts=pod_power.get("total_watts", 0.0),  # Use total_watts (CPU + DRAM)
             memory_watts=0.0,  # Not available in Kepler v0.11.2 at pod level
             gpu_watts=0.0,     # Not available in Kepler v0.11.2 at pod level
             other_watts=0.0    # Not available in Kepler v0.11.2 at pod level
@@ -425,10 +425,10 @@ async def get_regional_comparison(
     """
     logger.info("comparing_regions", workload=workload_name, regions=comparison_regions)
 
-    # Get workload metrics
-    pod_metrics = kepler_client.get_pod_metrics(workload_name, namespace)
+    # Get workload power metrics (calculates watts from joule deltas)
+    pod_power = kepler_client.get_pod_power_watts(workload_name, namespace)
     # Note: Kepler v0.11.2 only provides CPU watts at pod level
-    power_watts = pod_metrics.get("cpu_watts", 0.0)
+    power_watts = pod_power.get("total_watts", 0.0)
 
     from .carbon_calculator import calculate_carbon_emissions
 
@@ -508,10 +508,10 @@ async def calculate_optimal_schedule(
     """
     logger.info("calculating_optimal_schedule", workload=workload_name, duration=duration_hours)
 
-    # Get workload power
-    pod_metrics = kepler_client.get_pod_metrics(workload_name, namespace)
+    # Get workload power (calculates watts from joule deltas)
+    pod_power = kepler_client.get_pod_power_watts(workload_name, namespace)
     # Note: Kepler v0.11.2 only provides CPU watts at pod level
-    power_watts = pod_metrics.get("cpu_watts", 0.0)
+    power_watts = pod_power.get("total_watts", 0.0)
 
     # Simplified hourly carbon intensity profile for Korea (ap-northeast-2)
     # In production, this should come from Carbon Aware SDK
@@ -815,18 +815,25 @@ async def get_workload_metrics_resource(namespace: str, pod_name: str) -> str:
     import json
 
     try:
-        metrics = kepler_client.get_pod_metrics(pod_name, namespace)
+        # Get both raw joules and calculated watts
+        joule_metrics = kepler_client.get_pod_metrics(pod_name, namespace)
+        power_metrics = kepler_client.get_pod_power_watts(pod_name, namespace)
+
         # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics at pod level
-        total_watts = metrics.get("cpu_watts", 0.0)
+        total_watts = power_metrics.get("total_watts", 0.0)
+        cpu_watts = power_metrics.get("cpu_watts", 0.0)
 
         result = {
             "namespace": namespace,
             "pod": pod_name,
             "metrics": {
-                "cpu_watts": metrics.get("cpu_watts", 0.0),
-                "cpu_joules_total": metrics.get("cpu_joules_total", 0.0),
+                "cpu_watts": cpu_watts,
                 "total_watts": total_watts,
-                "note": "Only CPU metrics available at pod level in Kepler v0.11.2"
+                "cpu_joules_total": joule_metrics.get("cpu_joules_total", 0.0),
+                "dram_joules_total": joule_metrics.get("dram_joules_total", 0.0),
+                "total_joules": joule_metrics.get("total_joules", 0.0),
+                "measurement_status": power_metrics.get("measurement_status", "unknown"),
+                "note": "Only CPU+DRAM metrics available at pod level in Kepler v0.11.2"
             },
             "collection_method": "ebpf"
         }

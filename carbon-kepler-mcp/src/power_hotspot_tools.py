@@ -98,13 +98,27 @@ class PowerHotspotDetector:
             pod_namespace = pod_info["namespace"]
 
             try:
-                # Get pod metrics
-                pod_metrics = self.kepler_client.get_pod_metrics(pod_name, pod_namespace)
-                cpu_watts = pod_metrics.get("cpu_watts", 0.0)
+                # Get pod power in watts (calculates from joule deltas)
+                pod_power = self.kepler_client.get_pod_power_watts(pod_name, pod_namespace)
+                cpu_watts = pod_power.get("cpu_watts", 0.0)
+                total_watts = pod_power.get("total_watts", 0.0)
+                measurement_status = pod_power.get("measurement_status", "unknown")
+
+                # Skip pods that are still initializing measurements
+                if measurement_status == "initializing":
+                    logger.debug(
+                        "skipping_pod_initializing",
+                        pod=pod_name,
+                        namespace=pod_namespace
+                    )
+                    continue
+
+                # Use total_watts if cpu_watts is 0 (might be DRAM-only workload)
+                effective_watts = total_watts if cpu_watts == 0 else cpu_watts
 
                 # Assess compliance
                 workload_metrics = WorkloadMetrics(
-                    cpu_watts=cpu_watts,
+                    cpu_watts=effective_watts,
                     memory_watts=0.0,
                     gpu_watts=0.0,
                     other_watts=0.0
@@ -124,9 +138,9 @@ class PowerHotspotDetector:
                 # Calculate efficiency score (0-100)
                 # Higher score = more efficient (lower power, compliant)
                 efficiency_score = 100.0
-                if cpu_watts > 0:
+                if effective_watts > 0:
                     # Penalize high power consumption
-                    efficiency_score -= min(cpu_watts * 10, 50)
+                    efficiency_score -= min(effective_watts * 10, 50)
                 if assessment.carbon.status != "COMPLIANT":
                     efficiency_score -= 25
                 if assessment.pue.status != "COMPLIANT":
@@ -137,8 +151,8 @@ class PowerHotspotDetector:
                     name=pod_name,
                     namespace=pod_namespace,
                     resource_type="pod",
-                    power_watts=cpu_watts,
-                    cpu_watts=cpu_watts,
+                    power_watts=effective_watts,
+                    cpu_watts=effective_watts,
                     rank=idx + 1,
                     carbon_compliant=(assessment.carbon.status == "COMPLIANT"),
                     pue_compliant=(assessment.pue.status == "COMPLIANT"),

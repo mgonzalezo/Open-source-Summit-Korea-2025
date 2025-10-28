@@ -26,11 +26,11 @@ def parse_prometheus_text(text: str) -> List[PrometheusMetric]:
     Parse Prometheus text exposition format
 
     Example input (RAPL joules metrics):
-        # HELP kepler_container_joules_total Total energy consumed by container (joules)
-        # TYPE kepler_container_joules_total counter
-        kepler_container_joules_total{pod_name="nginx",pod_namespace="default",container_name="nginx"} 33800.45
-        kepler_container_cpu_joules_total{pod_name="nginx",pod_namespace="default",container_name="nginx"} 25400.32
-        kepler_container_dram_joules_total{pod_name="nginx",pod_namespace="default",container_name="nginx"} 8400.13
+        # HELP kepler_pod_joules_total Total energy consumed by pod (joules)
+        # TYPE kepler_pod_joules_total counter
+        kepler_pod_joules_total{pod_name="nginx",pod_namespace="default",node_name="node1"} 33800.45
+        kepler_pod_cpu_joules_total{pod_name="nginx",pod_namespace="default",node_name="node1"} 25400.32
+        kepler_pod_dram_joules_total{pod_name="nginx",pod_namespace="default",node_name="node1"} 8400.13
 
     Args:
         text: Prometheus text format metrics
