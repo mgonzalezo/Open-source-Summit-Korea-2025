@@ -10,7 +10,7 @@ set -e
 STACK_NAME="kepler-k3s-rapl"
 REGION="ap-northeast-1"
 PROFILE="${AWS_PROFILE:-default}"
-KEY_NAME="oss-korea-ap"
+KEY_NAME="oss-korea"
 INSTANCE_TYPE="c5.metal"
 VOLUME_SIZE="100"
 AUTO_INSTALL="true"  # Set to "false" to manually run setup
@@ -44,12 +44,12 @@ VPC_ID=$(aws ec2 describe-vpcs \
   --output text)
 
 if [ "$VPC_ID" == "None" ] || [ -z "$VPC_ID" ]; then
-  echo -e "${RED}❌ No default VPC found in $REGION${NC}"
+  echo -e "${RED}ERROR: No default VPC found in $REGION${NC}"
   echo "Please specify a VPC ID manually or create a default VPC."
   exit 1
 fi
 
-echo -e "${GREEN}✅ Using VPC: $VPC_ID${NC}"
+echo -e "${GREEN}Using VPC: $VPC_ID${NC}"
 
 # Check if key pair exists
 echo -e "${YELLOW}Verifying SSH key pair...${NC}"
@@ -61,13 +61,13 @@ KEY_CHECK=$(aws ec2 describe-key-pairs \
   --output text 2>/dev/null || echo "None")
 
 if [ "$KEY_CHECK" == "None" ]; then
-  echo -e "${RED}❌ SSH key '$KEY_NAME' not found in $REGION${NC}"
+  echo -e "${RED}ERROR: SSH key '$KEY_NAME' not found in $REGION${NC}"
   echo "Available keys:"
   aws ec2 describe-key-pairs --region $REGION --profile $PROFILE --query "KeyPairs[*].KeyName" --output table
   exit 1
 fi
 
-echo -e "${GREEN}✅ SSH key verified: $KEY_NAME${NC}"
+echo -e "${GREEN}SSH key verified: $KEY_NAME${NC}"
 
 # Check for existing stack
 echo -e "${YELLOW}Checking for existing stack...${NC}"
@@ -79,10 +79,10 @@ STACK_STATUS=$(aws cloudformation describe-stacks \
   --output text 2>/dev/null || echo "NONE")
 
 if [ "$STACK_STATUS" != "NONE" ]; then
-  echo -e "${YELLOW}⚠️  Stack '$STACK_NAME' already exists with status: $STACK_STATUS${NC}"
+  echo -e "${YELLOW}WARNING: Stack '$STACK_NAME' already exists with status: $STACK_STATUS${NC}"
 
   if [[ "$STACK_STATUS" == *"IN_PROGRESS"* ]]; then
-    echo -e "${RED}❌ Stack operation in progress. Please wait for it to complete.${NC}"
+    echo -e "${RED}ERROR: Stack operation in progress. Please wait for it to complete.${NC}"
     exit 1
   fi
 
@@ -100,7 +100,7 @@ if [ "$STACK_STATUS" != "NONE" ]; then
       --region $REGION \
       --profile $PROFILE
 
-    echo -e "${GREEN}✅ Stack deleted${NC}"
+    echo -e "${GREEN}Stack deleted${NC}"
   else
     echo "Aborted."
     exit 0
@@ -112,11 +112,11 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TEMPLATE_PATH="$SCRIPT_DIR/../templates/kepler-k3s-automated-stack.yaml"
 
 if [ ! -f "$TEMPLATE_PATH" ]; then
-  echo -e "${RED}❌ Template not found: $TEMPLATE_PATH${NC}"
+  echo -e "${RED}ERROR: Template not found: $TEMPLATE_PATH${NC}"
   exit 1
 fi
 
-echo -e "${GREEN}✅ Template found: $TEMPLATE_PATH${NC}"
+echo -e "${GREEN}Template found: $TEMPLATE_PATH${NC}"
 
 # Deploy stack
 echo ""
@@ -141,7 +141,7 @@ aws cloudformation create-stack \
     Key=Environment,Value=Demo \
   --capabilities CAPABILITY_NAMED_IAM
 
-echo -e "${GREEN}✅ Stack creation initiated${NC}"
+echo -e "${GREEN}Stack creation initiated${NC}"
 echo ""
 echo "Waiting for stack to complete..."
 echo "(This may take 5-10 minutes)"
@@ -154,7 +154,7 @@ aws cloudformation wait stack-create-complete \
 
 echo ""
 echo -e "${GREEN}=========================================${NC}"
-echo -e "${GREEN}✅ Stack Created Successfully!${NC}"
+echo -e "${GREEN}Stack Created Successfully${NC}"
 echo -e "${GREEN}=========================================${NC}"
 echo ""
 
@@ -264,7 +264,7 @@ Management Scripts:
 Deployed: $(date)
 EOF
 
-echo -e "${GREEN}✅ Deployment information saved to: k3s-instance-info.txt${NC}"
+echo -e "${GREEN}Deployment information saved to: k3s-instance-info.txt${NC}"
 echo ""
-echo -e "${YELLOW}⏰ Wait ~15 minutes for Kepler installation to complete, then test the metrics endpoint.${NC}"
+echo -e "${YELLOW}NOTE: Wait ~15 minutes for Kepler installation to complete, then test the metrics endpoint.${NC}"
 echo ""

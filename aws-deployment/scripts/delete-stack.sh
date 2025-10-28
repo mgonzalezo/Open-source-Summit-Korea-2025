@@ -2,8 +2,8 @@
 set -e
 
 # Configuration
-STACK_NAME="kepler-k3s-stack"
-REGION="us-east-1"
+STACK_NAME="kepler-k3s-rapl"
+REGION="ap-northeast-1"
 PROFILE="${AWS_PROFILE:-default}"
 
 # Colors
@@ -37,14 +37,14 @@ INSTANCE_ID=$(aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue' \
     --output text 2>/dev/null)
 
-echo -e "${YELLOW}⚠️  WARNING: This will permanently delete:${NC}"
+echo -e "${YELLOW}WARNING: This will permanently delete:${NC}"
 echo "  - EC2 Instance ($INSTANCE_ID)"
 echo "  - EBS Volumes"
 echo "  - Elastic IP"
 echo "  - Security Group"
 echo "  - IAM Role and Instance Profile"
 echo ""
-echo -e "${RED}⚠️  This action CANNOT be undone!${NC}"
+echo -e "${RED}WARNING: This action CANNOT be undone${NC}"
 echo ""
 read -p "Type 'delete' to confirm: " CONFIRM
 
@@ -61,7 +61,7 @@ aws cloudformation delete-stack \
     --region $REGION \
     --stack-name $STACK_NAME
 
-echo -e "${GREEN}✓ Deletion initiated${NC}"
+echo -e "${GREEN}Deletion initiated${NC}"
 echo ""
 echo -e "${BLUE}Waiting for stack deletion to complete...${NC}"
 echo -e "${YELLOW}This may take a few minutes...${NC}"
@@ -74,7 +74,7 @@ aws cloudformation wait stack-delete-complete \
 if [ $? -eq 0 ]; then
     echo ""
     echo -e "${GREEN}=========================================${NC}"
-    echo -e "${GREEN}✓ Stack deleted successfully!${NC}"
+    echo -e "${GREEN}Stack deleted successfully${NC}"
     echo -e "${GREEN}=========================================${NC}"
     echo ""
     echo -e "${GREEN}All resources have been removed${NC}"

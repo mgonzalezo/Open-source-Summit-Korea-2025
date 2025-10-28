@@ -262,3 +262,9 @@ mcp-sse-bridge/
 aws-deployment/*-instance-info.txt
 aws-deployment/k3s-instance-info.txt
 aws-deployment/instance-info.txt
+
+# Demo files - temporary documentation
+DOCKER_K3S_FIX.md
+*-fix.md
+demo-*.md
+test-*.txt

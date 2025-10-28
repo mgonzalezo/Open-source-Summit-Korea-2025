@@ -7,8 +7,8 @@
 
 set -e
 
-STACK_NAME="kepler-k3s-stack"
-PROFILE="${AWS_PROFILE:-mgonzalezo}"
+STACK_NAME="kepler-k3s-rapl"
+PROFILE="${AWS_PROFILE:-default}"
 REGION="ap-northeast-1"
 
 echo "=================================================="
@@ -17,7 +17,7 @@ echo "=================================================="
 echo ""
 
 # Get instance ID from CloudFormation stack
-echo "🔍 Getting instance ID from stack: $STACK_NAME"
+echo "Getting instance ID from stack: $STACK_NAME"
 INSTANCE_ID=$(aws cloudformation describe-stacks \
   --profile "$PROFILE" \
   --region "$REGION" \
@@ -26,15 +26,15 @@ INSTANCE_ID=$(aws cloudformation describe-stacks \
   --output text)
 
 if [ -z "$INSTANCE_ID" ]; then
-  echo "❌ Error: Could not find instance ID in stack outputs"
+  echo "ERROR: Could not find instance ID in stack outputs"
   exit 1
 fi
 
-echo "✅ Instance ID: $INSTANCE_ID"
+echo "Instance ID: $INSTANCE_ID"
 echo ""
 
 # Check current state
-echo "🔍 Checking current instance state..."
+echo "Checking current instance state..."
 CURRENT_STATE=$(aws ec2 describe-instances \
   --profile "$PROFILE" \
   --region "$REGION" \
@@ -45,18 +45,18 @@ CURRENT_STATE=$(aws ec2 describe-instances \
 echo "   Current state: $CURRENT_STATE"
 
 if [ "$CURRENT_STATE" == "stopped" ]; then
-  echo "✅ Instance is already stopped"
+  echo "Instance is already stopped"
   exit 0
 fi
 
 if [ "$CURRENT_STATE" == "stopping" ]; then
-  echo "⏱️  Instance is already stopping"
+  echo "Instance is already stopping"
   exit 0
 fi
 
 # Stop the instance
 echo ""
-echo "🛑 Stopping instance..."
+echo "Stopping instance..."
 aws ec2 stop-instances \
   --profile "$PROFILE" \
   --region "$REGION" \
@@ -64,9 +64,9 @@ aws ec2 stop-instances \
   --output table
 
 echo ""
-echo "✅ Stop command sent successfully"
+echo "Stop command sent successfully"
 echo ""
-echo "⏱️  Waiting for instance to stop (this may take 1-2 minutes)..."
+echo "Waiting for instance to stop (this may take 1-2 minutes)..."
 
 # Wait for instance to stop
 aws ec2 wait instance-stopped \
@@ -76,14 +76,14 @@ aws ec2 wait instance-stopped \
 
 echo ""
 echo "=================================================="
-echo "✅ Instance stopped successfully!"
+echo "Instance stopped successfully"
 echo "=================================================="
 echo ""
-echo "💰 Cost Savings:"
+echo "Cost Savings:"
 echo "   - Running:  ~\$4.90/hour (\$117.50/day)"
 echo "   - Stopped:  ~\$0.33/day (storage only)"
 echo "   - Savings:  ~\$117/day when stopped"
 echo ""
-echo "📝 To restart the instance, run:"
+echo "To restart the instance, run:"
 echo "   ./scripts/start-instance.sh"
 echo ""

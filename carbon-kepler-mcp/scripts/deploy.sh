@@ -8,6 +8,10 @@ set -e
 # Configuration
 NAMESPACE="carbon-mcp"
 PUBLIC_IP="${PUBLIC_IP:-}"
+IMAGE_NAME="carbon-kepler-mcp"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+REGISTRY="${REGISTRY:-localhost:5000}"
+FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "========================================="
 echo "Deploying Carbon-Aware Kepler MCP Server"
@@ -16,8 +20,26 @@ echo ""
 
 # Check if kubectl is available
 if ! command -v kubectl &> /dev/null; then
-    echo "❌ kubectl not found. Please install kubectl."
+    echo "ERROR: kubectl not found. Please install kubectl."
     exit 1
+fi
+
+# Ensure image is in K3s containerd
+if command -v k3s &> /dev/null; then
+    echo "Checking if image exists in K3s containerd..."
+    if ! sudo k3s ctr images ls | grep -q "$FULL_IMAGE"; then
+        echo "Image not found in containerd. Importing from Docker..."
+        if sudo docker images | grep -q "${REGISTRY}/${IMAGE_NAME}"; then
+            sudo docker save "$FULL_IMAGE" | sudo k3s ctr images import -
+            echo "Image imported into K3s containerd"
+        else
+            echo "WARNING: Docker image $FULL_IMAGE not found"
+            echo "Please run './scripts/build.sh' first to build the image"
+        fi
+    else
+        echo "Image already exists in K3s containerd"
+    fi
+    echo ""
 fi
 
 # Apply Kubernetes manifests
@@ -30,7 +52,7 @@ kubectl wait --for=condition=available --timeout=120s \
     deployment/carbon-mcp-server -n $NAMESPACE
 
 echo ""
-echo "✅ Deployment complete!"
+echo "Deployment complete"
 echo ""
 
 # Get pod status
