@@ -6,7 +6,8 @@ of Kubernetes workloads based on Kepler energy metrics.
 """
 
 import os
-from typing import Dict, List, Optional
+import math
+from typing import Dict, List, Optional, Any
 import structlog
 from fastmcp import FastMCP
 
@@ -36,6 +37,25 @@ structlog.configure(
 )
 
 logger = structlog.get_logger()
+
+
+def sanitize_float(value: float) -> float:
+    """Sanitize float values to ensure JSON compatibility"""
+    if math.isnan(value) or math.isinf(value):
+        return 0.0
+    return value
+
+
+def sanitize_dict(data: Any) -> Any:
+    """Recursively sanitize dictionary to ensure all floats are JSON-safe"""
+    if isinstance(data, dict):
+        return {k: sanitize_dict(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_dict(item) for item in data]
+    elif isinstance(data, float):
+        return sanitize_float(data)
+    return data
+
 
 # Initialize MCP server
 mcp = FastMCP("carbon-kepler-mcp")
@@ -731,13 +751,16 @@ async def list_top_power_consumers(
         # Get summary
         summary = hotspot_detector.get_power_consumption_summary(namespace)
 
-        return {
+        result = {
             "namespace": namespace or "all",
             "sort_by": sort_by,
             "limit": limit,
             "summary": summary,
             "consumers": consumer_list
         }
+
+        # Sanitize all float values to prevent NaN/Infinity in JSON
+        return sanitize_dict(result)
 
     except Exception as e:
         logger.error("failed_to_list_consumers", error=str(e))
@@ -763,7 +786,7 @@ async def get_power_consumption_summary(
 
     try:
         summary = hotspot_detector.get_power_consumption_summary(namespace)
-        return summary
+        return sanitize_dict(summary)
 
     except Exception as e:
         logger.error("failed_to_get_summary", error=str(e))
