@@ -131,7 +131,7 @@ class PowerHotspotDetector:
                     namespace=pod_namespace,
                     region="ap-northeast-2",
                     workload_metrics=workload_metrics,
-                    node_total_power_watts=node_metrics.get("cpu_watts", 0.0),
+                    node_total_power_watts=node_metrics.get("cpu_watts_total", 0.0),
                     grid_carbon_intensity_gco2_kwh=self.carbon_intensity
                 )
 

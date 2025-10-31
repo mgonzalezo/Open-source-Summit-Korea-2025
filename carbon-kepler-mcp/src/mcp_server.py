@@ -179,7 +179,7 @@ async def assess_workload_compliance(
             namespace=namespace,
             region=region,
             workload_metrics=workload_metrics,
-            node_total_power_watts=node_metrics.get("cpu_watts", 0.0),
+            node_total_power_watts=node_metrics.get("cpu_watts_total", 0.0),
             grid_carbon_intensity_gco2_kwh=grid_intensity
         )
 
@@ -815,25 +815,23 @@ async def get_workload_metrics_resource(namespace: str, pod_name: str) -> str:
     import json
 
     try:
-        # Get both raw joules and calculated watts
-        joule_metrics = kepler_client.get_pod_metrics(pod_name, namespace)
+        # Get native watts metrics from Kepler
         power_metrics = kepler_client.get_pod_power_watts(pod_name, namespace)
 
-        # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics at pod level
+        # Extract watts metrics
         total_watts = power_metrics.get("total_watts", 0.0)
         cpu_watts = power_metrics.get("cpu_watts", 0.0)
+        dram_watts = power_metrics.get("dram_watts", 0.0)
 
         result = {
             "namespace": namespace,
             "pod": pod_name,
             "metrics": {
                 "cpu_watts": cpu_watts,
+                "dram_watts": dram_watts,
                 "total_watts": total_watts,
-                "cpu_joules_total": joule_metrics.get("cpu_joules_total", 0.0),
-                "dram_joules_total": joule_metrics.get("dram_joules_total", 0.0),
-                "total_joules": joule_metrics.get("total_joules", 0.0),
-                "measurement_status": power_metrics.get("measurement_status", "unknown"),
-                "note": "Only CPU+DRAM metrics available at pod level in Kepler v0.11.2"
+                "measurement_status": power_metrics.get("measurement_status", "active"),
+                "note": "Native Kepler watts metrics (CPU package + DRAM)"
             },
             "collection_method": "ebpf"
         }
