@@ -28,10 +28,13 @@ export KUBECONFIG=/home/ubuntu/.kube/config
 
 # Deploy demo workloads
 echo "1. Deploying demo workloads..."
-kubectl create namespace demo-workloads 2>/dev/null || true
 
-# Check if demo-workloads.yaml exists in k8s directory
-if [ -f "$MCP_DIR/k8s/demo-workloads.yaml" ]; then
+# Use the test-workloads high-power-app.yaml (better examples)
+if [ -f "$MCP_DIR/test-workloads/high-power-app.yaml" ]; then
+    echo "Deploying test workloads from test-workloads/high-power-app.yaml..."
+    kubectl apply -f "$MCP_DIR/test-workloads/high-power-app.yaml"
+elif [ -f "$MCP_DIR/k8s/demo-workloads.yaml" ]; then
+    echo "Deploying demo workloads from k8s/demo-workloads.yaml..."
     kubectl apply -f "$MCP_DIR/k8s/demo-workloads.yaml"
 else
     echo "Creating demo workloads from inline manifest..."
