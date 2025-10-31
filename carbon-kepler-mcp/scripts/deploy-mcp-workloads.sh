@@ -206,7 +206,12 @@ docker save carbon-kepler-mcp:latest | sudo k3s ctr images import -
 echo ""
 echo "3. Deploying MCP server to Kubernetes..."
 kubectl create namespace carbon-mcp 2>/dev/null || true
-kubectl apply -f "$MCP_DIR/k8s/"
+# Apply each manifest individually to avoid kustomization.yaml error
+for file in "$MCP_DIR/k8s"/*.yaml; do
+    if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+        kubectl apply -f "$file"
+    fi
+done
 
 # Wait for MCP server
 echo "Waiting for MCP server to be ready..."
