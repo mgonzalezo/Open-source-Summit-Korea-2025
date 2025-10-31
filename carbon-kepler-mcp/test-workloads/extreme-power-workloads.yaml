@@ -1,0 +1,290 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: non-compliant-workloads
+  labels:
+    purpose: oss-korea-2025-demo
+    compliance: non-compliant
+
+---
+# Extreme CPU burner - guaranteed to be non-compliant
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extreme-cpu-burner
+  namespace: non-compliant-workloads
+  labels:
+    app: extreme-cpu
+    demo: non-compliant
+    power-profile: extreme
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: extreme-cpu
+  template:
+    metadata:
+      labels:
+        app: extreme-cpu
+        demo: non-compliant
+        power-profile: extreme
+    spec:
+      containers:
+      - name: stress-extreme
+        image: containerstack/alpine-stress:latest
+        resources:
+          requests:
+            cpu: "3000m"      # Request 3 CPUs
+            memory: "1Gi"
+          limits:
+            cpu: "8000m"      # Allow up to 8 CPUs
+            memory: "2Gi"
+        command: ["stress"]
+        args:
+          - "--cpu"
+          - "8"             # Max out 8 CPU workers
+          - "--timeout"
+          - "7200"          # Run for 2 hours
+          - "--verbose"
+        env:
+        - name: WORKLOAD_TYPE
+          value: "extreme-cpu-non-compliant"
+
+---
+# Massive memory + CPU combo
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heavy-memory-cpu-combo
+  namespace: non-compliant-workloads
+  labels:
+    app: heavy-combo
+    demo: non-compliant
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: heavy-combo
+  template:
+    metadata:
+      labels:
+        app: heavy-combo
+        demo: non-compliant
+        power-profile: extreme
+    spec:
+      containers:
+      - name: stress-combo
+        image: containerstack/alpine-stress:latest
+        resources:
+          requests:
+            cpu: "2000m"
+            memory: "2Gi"
+          limits:
+            cpu: "6000m"
+            memory: "4Gi"
+        command: ["stress"]
+        args:
+          - "--cpu"
+          - "6"            # 6 CPU workers
+          - "--vm"
+          - "4"            # 4 memory workers
+          - "--vm-bytes"
+          - "512M"         # Each allocates 512MB
+          - "--timeout"
+          - "7200"
+          - "--verbose"
+        env:
+        - name: WORKLOAD_TYPE
+          value: "heavy-combo-non-compliant"
+
+---
+# Intense crypto mining simulation (very high CPU)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intense-crypto-miner
+  namespace: non-compliant-workloads
+  labels:
+    app: crypto-intense
+    demo: non-compliant
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: crypto-intense
+  template:
+    metadata:
+      labels:
+        app: crypto-intense
+        demo: non-compliant
+        power-profile: extreme
+    spec:
+      containers:
+      - name: cpu-hash-intense
+        image: python:3.11-slim
+        resources:
+          requests:
+            cpu: "4000m"     # Request 4 CPUs
+            memory: "512Mi"
+          limits:
+            cpu: "8000m"     # Allow 8 CPUs
+            memory: "1Gi"
+        command: ["python3", "-c"]
+        args:
+        - |
+          # Extremely intensive crypto mining simulation
+          import hashlib
+          import multiprocessing
+          import time
+
+          def mine_block(worker_id):
+              print(f"Worker {worker_id} starting intensive mining...")
+              nonce = worker_id * 1000000
+              target = "0000"  # 4 leading zeros - harder
+
+              while True:
+                  # Double hash for more CPU intensity
+                  data = f"block_{nonce}_{worker_id}".encode()
+                  hash1 = hashlib.sha256(data).hexdigest()
+                  hash2 = hashlib.sha512(hash1.encode()).hexdigest()
+
+                  if hash2.startswith(target):
+                      print(f"Worker {worker_id} found hash: {hash2[:20]}... (nonce: {nonce})")
+                      target = "00000"  # Make it even harder
+
+                  nonce += 1
+
+                  if nonce % 500000 == 0:
+                      print(f"Worker {worker_id}: {nonce} attempts")
+
+          # Spawn 8 workers to max out CPU
+          processes = []
+          for i in range(8):
+              p = multiprocessing.Process(target=mine_block, args=(i,))
+              p.start()
+              processes.append(p)
+
+          for p in processes:
+              p.join()
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+
+---
+# Inefficient machine learning simulation
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inefficient-ml-training
+  namespace: non-compliant-workloads
+  labels:
+    app: ml-inefficient
+    demo: non-compliant
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ml-inefficient
+  template:
+    metadata:
+      labels:
+        app: ml-inefficient
+        demo: non-compliant
+        power-profile: high
+    spec:
+      containers:
+      - name: ml-train
+        image: python:3.11-slim
+        resources:
+          requests:
+            cpu: "3000m"
+            memory: "2Gi"
+          limits:
+            cpu: "6000m"
+            memory: "4Gi"
+        command: ["python3", "-c"]
+        args:
+        - |
+          # Simulate inefficient ML training with matrix operations
+          import random
+          import time
+
+          print("Starting inefficient ML training simulation...")
+
+          def matrix_multiply(size):
+              """Inefficient matrix multiplication"""
+              # Create random matrices
+              a = [[random.random() for _ in range(size)] for _ in range(size)]
+              b = [[random.random() for _ in range(size)] for _ in range(size)]
+
+              # Inefficient triple-nested loop multiplication
+              result = [[0 for _ in range(size)] for _ in range(size)]
+              for i in range(size):
+                  for j in range(size):
+                      for k in range(size):
+                          result[i][j] += a[i][k] * b[k][j]
+              return result
+
+          epoch = 0
+          while True:
+              # Large matrix operations (CPU intensive)
+              print(f"Epoch {epoch}: Training batch...")
+              result = matrix_multiply(500)  # 500x500 matrices
+
+              # Simulate gradient calculations
+              for _ in range(100):
+                  _ = sum([random.random() ** 2 for _ in range(10000)])
+
+              epoch += 1
+              print(f"Epoch {epoch} complete")
+              time.sleep(1)
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+
+---
+# Massively over-provisioned idle workload (wasteful)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wasteful-over-provisioned
+  namespace: non-compliant-workloads
+  labels:
+    app: wasteful-idle
+    demo: non-compliant
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: wasteful-idle
+  template:
+    metadata:
+      labels:
+        app: wasteful-idle
+        demo: non-compliant
+        power-profile: wasteful
+    spec:
+      containers:
+      - name: idle-wasteful
+        image: busybox:latest
+        resources:
+          requests:
+            cpu: "4000m"      # Requesting 4 CPUs
+            memory: "4Gi"     # Requesting 4GB RAM
+          limits:
+            cpu: "8000m"      # Limit 8 CPUs
+            memory: "8Gi"     # Limit 8GB RAM
+        command: ["sh", "-c"]
+        args:
+        - |
+          # Extremely wasteful: requests massive resources but does nothing
+          echo "Wasteful pod started - requesting 4 CPUs and 4GB RAM"
+          echo "Actual usage: ~0.001 CPU, ~10MB RAM"
+          echo "This represents 99.9% waste!"
+          echo "Carbon footprint: HIGH due to resource reservation"
+
+          while true; do
+            sleep 600
+            echo "Still wasting resources..."
+          done
