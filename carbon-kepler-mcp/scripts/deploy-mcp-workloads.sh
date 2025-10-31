@@ -11,13 +11,19 @@ echo "Deploying MCP Server and Demo Workloads"
 echo "========================================="
 echo ""
 
-# Check if we're in the right directory
-if [ ! -f "../../carbon-kepler-mcp/Dockerfile" ]; then
-    echo "ERROR: Must run from Open-source-Summit-Korea-2025/aws-deployment/scripts/"
-    echo "Current directory: $(pwd)"
+# Find the carbon-kepler-mcp directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MCP_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Verify we found the right directory
+if [ ! -f "$MCP_DIR/Dockerfile" ]; then
+    echo "ERROR: Cannot find carbon-kepler-mcp/Dockerfile"
+    echo "Script directory: $SCRIPT_DIR"
+    echo "MCP directory: $MCP_DIR"
     exit 1
 fi
 
+echo "MCP directory: $MCP_DIR"
 export KUBECONFIG=/home/ubuntu/.kube/config
 
 # Deploy demo workloads
@@ -25,8 +31,8 @@ echo "1. Deploying demo workloads..."
 kubectl create namespace demo-workloads 2>/dev/null || true
 
 # Check if demo-workloads.yaml exists in k8s directory
-if [ -f "../../carbon-kepler-mcp/k8s/demo-workloads.yaml" ]; then
-    kubectl apply -f ../../carbon-kepler-mcp/k8s/demo-workloads.yaml
+if [ -f "$MCP_DIR/k8s/demo-workloads.yaml" ]; then
+    kubectl apply -f "$MCP_DIR/k8s/demo-workloads.yaml"
 else
     echo "Creating demo workloads from inline manifest..."
     cat > /tmp/demo-workloads.yaml << 'EOF'
@@ -184,7 +190,7 @@ kubectl get pods -n demo-workloads
 # Build and deploy MCP server
 echo ""
 echo "2. Building MCP server Docker image..."
-cd ../../carbon-kepler-mcp
+cd "$MCP_DIR"
 
 # Build Docker image
 docker build -t carbon-kepler-mcp:latest .
@@ -197,7 +203,7 @@ docker save carbon-kepler-mcp:latest | sudo k3s ctr images import -
 echo ""
 echo "3. Deploying MCP server to Kubernetes..."
 kubectl create namespace carbon-mcp 2>/dev/null || true
-kubectl apply -f k8s/
+kubectl apply -f "$MCP_DIR/k8s/"
 
 # Wait for MCP server
 echo "Waiting for MCP server to be ready..."
