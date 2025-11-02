@@ -115,33 +115,9 @@ curl -k https://<PublicIP>:30443/metrics | grep kepler_node_package_energy_joule
 # Expected: Real joule measurements from 4 RAPL zones
 ```
 
-### 3. Configure Claude Desktop (Windows)
+### 3. Test Compliance Queries
 
-```bash
-# 1. Copy bridge script to Windows
-scp carbon-kepler-mcp/mcp-sse-bridge-windows.js user@windows-machine:C:\Users\<username>\
-
-# 2. Update claude_desktop_config.json on Windows
-# File location: %APPDATA%\Claude\claude_desktop_config.json
-```
-
-```json
-{
-  "mcpServers": {
-    "carbon-kepler": {
-      "command": "node",
-      "args": [
-        "C:\\Users\\<username>\\mcp-sse-bridge-windows.js",
-        "http://<PublicIP>:30800/sse"
-      ]
-    }
-  }
-}
-```
-
-### 4. Test Compliance Queries
-
-Open Claude Desktop and try:
+Access the MCP server via HTTP:
 
 ```
 "What is the total power consumption of my Kubernetes cluster?"
@@ -304,8 +280,7 @@ Open-source-Summit-Korea-2025/
 └── carbon-kepler-mcp/                 # MCP Server
     ├── readme.md                      # MCP documentation
     ├── architecture-roles.md          # Layer roles
-    ├── mcp-sse-bridge-windows.js      # Windows Claude Desktop bridge
-    ├── mcp-sse-bridge.js              # Linux/Mac bridge
+    ├── mcp-sse-bridge.js              # Universal MCP bridge (Mac/Linux/Windows)
     ├── src/                           # Python MCP implementation
     │   ├── mcp_server.py              # FastMCP server
     │   ├── kepler_client.py           # Kepler metrics client
@@ -346,7 +321,7 @@ cd aws-deployment
 ### 1. Infrastructure Demo (5 minutes)
 ```bash
 # SSH to instance
-ssh -i <key>.pem ubuntu@<PublicIP>
+ssh -i <your-key>.pem ubuntu@<PublicIP>
 
 # Show RAPL modules
 lsmod | grep rapl

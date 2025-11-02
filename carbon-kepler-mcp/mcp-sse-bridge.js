@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * MCP SSE Bridge for Windows
- * 
+ * MCP SSE Bridge (Mac/Linux/Windows)
+ *
  * Bridges STDIO (used by Claude Desktop) to SSE (Server-Sent Events)
  * allowing Claude Desktop to connect to remote MCP servers via SSE transport.
+ *
+ * Fixed version: Properly handles multi-line JSON in tool descriptions
  */
 
 const https = require('https');
 const http = require('http');
 
-// SSE endpoint - UPDATE THIS to your current EC2 IP
-const SSE_ENDPOINT = process.argv[2] || 'http://3.115.147.150:30800/sse';
+// SSE endpoint - pass as first argument
+const SSE_ENDPOINT = process.argv[2] || 'http://localhost:30800/sse';
 
 console.error('[Bridge] Starting MCP SSE Bridge');
 console.error('[Bridge] SSE Endpoint:', SSE_ENDPOINT);
@@ -36,35 +38,52 @@ const sseRequest = client.request(url, {
     }
 }, (res) => {
     console.error('[Bridge] Connected (' + res.statusCode + ')');
-    
+
     let eventType = null;
-    let data = '';
+    let dataLines = [];
+
+    res.setEncoding('utf8');
 
     res.on('data', (chunk) => {
         const lines = chunk.toString().split('\n');
-        
+
         for (const line of lines) {
             if (line.startsWith('event: ')) {
                 eventType = line.substring(7).trim();
             } else if (line.startsWith('data: ')) {
-                data = line.substring(6).trim();
-            } else if (line === '' && eventType && data) {
-                // Process complete event
+                dataLines.push(line.substring(6));
+            } else if (line === '' && eventType && dataLines.length > 0) {
+                // Process complete event (SSE uses blank line as delimiter)
+                const data = dataLines.join('\n').trim();
+
                 if (eventType === 'endpoint') {
-                    sessionId = data.match(/session_id=([^&]+)/)[1];
-                    console.error('[Bridge] Session endpoint:', data);
-                    console.error('[Bridge] Bridge ready');
-                    
-                    // Send any buffered messages
-                    buffer.forEach(msg => sendToServer(msg));
-                    buffer = [];
+                    const match = data.match(/session_id=([^&]+)/);
+                    if (match) {
+                        sessionId = match[1];
+                        console.error('[Bridge] Session endpoint:', data);
+                        console.error('[Bridge] Session ID:', sessionId);
+                        console.error('[Bridge] Bridge ready');
+
+                        // Send any buffered messages
+                        buffer.forEach(msg => sendToServer(msg));
+                        buffer = [];
+                    }
                 } else if (eventType === 'message') {
                     // Forward message to stdout (Claude Desktop)
-                    console.log(data);
+                    // Ensure proper JSON formatting
+                    try {
+                        // Validate it's proper JSON before forwarding
+                        JSON.parse(data);
+                        console.log(data);
+                    } catch (e) {
+                        console.error('[Bridge] Invalid JSON from server:', e.message);
+                        console.error('[Bridge] Data:', data.substring(0, 200));
+                    }
                 }
-                
+
+                // Reset for next event
                 eventType = null;
-                data = '';
+                dataLines = [];
             }
         }
     });
@@ -84,26 +103,33 @@ sseRequest.end();
 
 // Read from stdin (Claude Desktop)
 let stdinBuffer = '';
+process.stdin.setEncoding('utf8');
+
 process.stdin.on('data', (chunk) => {
     stdinBuffer += chunk.toString();
-    
-    // Try to parse complete JSON messages
-    let startIdx = 0;
-    for (let i = 0; i < stdinBuffer.length; i++) {
-        if (stdinBuffer[i] === '\n') {
-            const message = stdinBuffer.substring(startIdx, i).trim();
-            if (message) {
+
+    // Process complete JSON-RPC messages (delimited by newlines)
+    const lines = stdinBuffer.split('\n');
+    stdinBuffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+    for (const line of lines) {
+        const message = line.trim();
+        if (message) {
+            try {
+                // Validate JSON before sending
+                JSON.parse(message);
+
                 if (sessionId) {
                     sendToServer(message);
                 } else {
                     console.error('[Bridge] Buffering message (no session yet)');
                     buffer.push(message);
                 }
+            } catch (e) {
+                console.error('[Bridge] Invalid JSON from client:', e.message);
             }
-            startIdx = i + 1;
         }
     }
-    stdinBuffer = stdinBuffer.substring(startIdx);
 });
 
 process.stdin.on('end', () => {
@@ -120,18 +146,21 @@ function sendToServer(message) {
 
     const postData = message;
     const postUrl = new URL(`/messages/?session_id=${sessionId}`, SSE_ENDPOINT);
-    
+
     const postRequest = client.request(postUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData)
+            'Content-Length': Buffer.byteLength(postData, 'utf8')
         }
     }, (res) => {
         let responseData = '';
+        res.setEncoding('utf8');
+
         res.on('data', (chunk) => {
             responseData += chunk;
         });
+
         res.on('end', () => {
             if (res.statusCode !== 202) {
                 console.error('[Bridge] POST failed:', res.statusCode, responseData);
@@ -143,6 +172,6 @@ function sendToServer(message) {
         console.error('[Bridge] POST error:', err.message);
     });
 
-    postRequest.write(postData);
+    postRequest.write(postData, 'utf8');
     postRequest.end();
 }
