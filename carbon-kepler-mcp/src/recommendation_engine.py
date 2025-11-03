@@ -13,7 +13,11 @@ from .korea_compliance import (
     ComplianceStatus,
     WorkloadMetrics
 )
-from .compliance_standards import REGIONAL_CARBON_INTENSITY
+from .compliance_standards import (
+    REGIONAL_CARBON_INTENSITY,
+    KOREA_PUE_GREEN_DC,
+    get_regional_pue
+)
 
 logger = structlog.get_logger()
 
@@ -333,29 +337,66 @@ def _calculate_regional_optimization(
     current_region: str,
     power_watts: float
 ) -> Optional[OptimizationSuggestion]:
-    """Calculate regional migration optimization"""
+    """
+    Calculate regional migration optimization.
+
+    Finds the best region based on:
+    1. Carbon intensity (primary - lowest gCO2/kWh)
+    2. PUE efficiency (secondary - lowest PUE for tied carbon savings)
+    3. Korean Green DC compliance (PUE ≤ 1.4)
+    """
     current_data = REGIONAL_CARBON_INTENSITY.get(current_region)
     if not current_data:
         return None
 
     current_intensity = current_data["average_gco2_kwh"]
 
-    # Find best region (eu-north-1 is cleanest)
-    best_region = "eu-north-1"
-    best_data = REGIONAL_CARBON_INTENSITY.get(best_region)
+    # Find best region by comparing ALL available regions
+    best_region = None
+    best_intensity = float('inf')
+    best_pue = float('inf')
 
-    if not best_data:
+    for region_code, region_data in REGIONAL_CARBON_INTENSITY.items():
+        if region_code == current_region:
+            continue  # Skip current region
+
+        intensity = region_data["average_gco2_kwh"]
+
+        # Get PUE data if available
+        pue_data = get_regional_pue(region_code)
+        pue = pue_data.get("typical_pue", 999) if pue_data else 999
+
+        # Find region with lowest carbon (primary), then lowest PUE (secondary)
+        if intensity < best_intensity or (intensity == best_intensity and pue < best_pue):
+            best_region = region_code
+            best_intensity = intensity
+            best_pue = pue
+
+    if not best_region:
         return None
 
-    best_intensity = best_data["average_gco2_kwh"]
+    best_data = REGIONAL_CARBON_INTENSITY[best_region]
     reduction_percent = ((current_intensity - best_intensity) / current_intensity * 100)
 
     if reduction_percent <= 0:
         return None
 
+    # Build description with PUE awareness
+    description = f"Migrate to {best_data['region_name']} (cleaner grid"
+
+    # Add PUE info if available and meets Korean target
+    if best_pue < 999:
+        meets_pue = best_pue <= KOREA_PUE_GREEN_DC.target_pue
+        if meets_pue:
+            description += f", PUE {best_pue} ✅"
+        else:
+            description += f", PUE {best_pue}"
+
+    description += ")"
+
     return OptimizationSuggestion(
         type="regional_migration",
-        description=f"Migrate to {best_data['region_name']} (cleaner grid)",
+        description=description,
         estimated_reduction_percent=reduction_percent,
         estimated_new_intensity_gco2_kwh=best_intensity,
         implementation_complexity="high"

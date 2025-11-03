@@ -23,7 +23,9 @@ from .compliance_standards import (
     KOREA_CARBON_NEUTRALITY,
     KOREA_PUE_GREEN_DC,
     REGIONAL_CARBON_INTENSITY,
-    get_regional_carbon_intensity
+    REGIONAL_PUE_DATA,
+    get_regional_carbon_intensity,
+    get_regional_pue
 )
 from .power_hotspot_tools import PowerHotspotDetector, PowerConsumer, PreventiveAction
 
@@ -425,81 +427,149 @@ async def list_workloads_by_compliance(
 
 
 @mcp.tool()
-async def get_regional_comparison(
+async def get_migration_recommendations(
     workload_name: str,
     namespace: str = "default",
     current_region: str = "ap-northeast-2",
-    comparison_regions: List[str] = ["us-east-1", "eu-north-1", "ap-northeast-1"]
+    threshold_gco2_kwh: float = 424.0
 ) -> Dict:
     """
-    Compare carbon impact of workload across AWS regions.
+    Get recommended regions for workload migration based on carbon compliance.
+
+    Automatically recommends cleaner regions when workload approaches or exceeds
+    the Korean carbon target (424 gCO2eq/kWh). Considers BOTH Korean regulatory
+    requirements:
+    - Carbon Intensity ≤ 424 gCO2eq/kWh (탄소중립법)
+    - PUE ≤ 1.4 (에너지합리화법 - Green DC certification)
 
     Args:
         workload_name: Pod or deployment name
         namespace: Kubernetes namespace (default: "default")
-        current_region: Current AWS region (default: "ap-northeast-2")
-        comparison_regions: Regions to compare (default: us-east-1, eu-north-1, ap-northeast-1)
+        current_region: Current AWS region (default: "ap-northeast-2" Seoul)
+        threshold_gco2_kwh: Carbon threshold to trigger recommendations (default: 424)
 
     Returns:
-        Regional comparison with best region recommendation
+        Migration recommendations ranked by carbon savings (primary) and PUE (secondary)
     """
-    logger.info("comparing_regions", workload=workload_name, regions=comparison_regions)
+    logger.info("get_migration_recommendations",
+                workload=workload_name,
+                threshold=threshold_gco2_kwh)
 
-    # Get workload power metrics (calculates watts from joule deltas)
+    # Get workload power
     pod_power = kepler_client.get_pod_power_watts(workload_name, namespace)
-    # Note: Kepler v0.11.2 only provides CPU watts at pod level
     power_watts = pod_power.get("total_watts", 0.0)
 
     from .carbon_calculator import calculate_carbon_emissions
 
-    comparisons = []
-    best_region = None
-    best_intensity = float('inf')
+    # Get current region data
+    current_data = get_regional_carbon_intensity(current_region)
+    if not current_data:
+        return {"error": f"Unknown region: {current_region}"}
 
-    for region in [current_region] + comparison_regions:
+    current_intensity = current_data["average_gco2_kwh"]
+    current_emissions = calculate_carbon_emissions(power_watts, current_intensity)
+
+    # Get current region PUE
+    current_pue_data = get_regional_pue(current_region)
+    current_pue = current_pue_data.get("typical_pue") if current_pue_data else None
+
+    # Check if we're approaching/exceeding threshold
+    threshold_percent = (current_intensity / threshold_gco2_kwh) * 100
+    needs_migration = current_intensity >= (threshold_gco2_kwh * 0.9)  # 90% threshold
+
+    # Compare ALL available regions
+    all_regions = REGIONAL_CARBON_INTENSITY.keys()
+    recommendations = []
+
+    for region in all_regions:
+        if region == current_region:
+            continue  # Skip current region
+
         regional_data = get_regional_carbon_intensity(region)
-
-        if not regional_data:
-            continue
-
         intensity = regional_data["average_gco2_kwh"]
         emissions = calculate_carbon_emissions(power_watts, intensity)
 
-        is_current = (region == current_region)
-        is_compliant = intensity <= KOREA_CARBON_NEUTRALITY.target_carbon_intensity_gco2_kwh
+        savings_gco2 = current_emissions - emissions
+        savings_percent = ((current_intensity - intensity) / current_intensity * 100)
 
-        comparisons.append({
-            "region": region,
-            "region_name": regional_data["region_name"],
-            "carbon_intensity_gCO2eq_kWh": intensity,
-            "hourly_emissions_gCO2eq": emissions,
-            "status": "COMPLIANT" if is_compliant else "NON_COMPLIANT",
-            "is_current": is_current
-        })
+        # Get PUE data for this region
+        pue_data = get_regional_pue(region)
+        typical_pue = pue_data.get("typical_pue") if pue_data else None
+        meets_pue_target = (typical_pue <= KOREA_PUE_GREEN_DC.target_pue) if typical_pue else None
 
-        if intensity < best_intensity:
-            best_intensity = intensity
-            best_region = regional_data["region_name"]
+        # Only recommend regions that are cleaner
+        if savings_percent > 0:
+            recommendation = {
+                "region_code": region,
+                "region_name": regional_data["region_name"],
+                "carbon_intensity_gco2_kwh": intensity,
+                "estimated_emissions_gco2_hour": emissions,
+                "savings_gco2_hour": savings_gco2,
+                "savings_percent": savings_percent,
+                "grid_mix": regional_data.get("grid_mix", {}),
+                "meets_korean_target": intensity <= threshold_gco2_kwh,
+                "source": regional_data.get("source", "")
+            }
 
-    # Sort by carbon intensity
-    comparisons.sort(key=lambda x: x["carbon_intensity_gCO2eq_kWh"])
+            # Add PUE data if available
+            if typical_pue is not None:
+                recommendation["typical_pue"] = typical_pue
+                recommendation["meets_pue_target"] = meets_pue_target
+                if pue_data:
+                    recommendation["pue_data_center_type"] = pue_data.get("data_center_type", "")
 
-    current_intensity = get_regional_carbon_intensity(current_region)["average_gco2_kwh"]
-    best_region_intensity = comparisons[0]["carbon_intensity_gCO2eq_kWh"]
-    savings_percent = ((current_intensity - best_region_intensity) / current_intensity * 100)
+            recommendations.append(recommendation)
+
+    # Sort by savings percent (primary), then by PUE (secondary - lower is better)
+    recommendations.sort(key=lambda x: (-x["savings_percent"], x.get("typical_pue", 999)))
+
+    # Create status message
+    if current_intensity >= threshold_gco2_kwh:
+        status = "⚠️ EXCEEDS THRESHOLD"
+        urgency = "HIGH"
+        message = (f"Current region ({current_data['region_name']}) exceeds Korean carbon target "
+                  f"by {threshold_percent - 100:.1f}%. Migration RECOMMENDED.")
+    elif needs_migration:
+        status = "⚠️ APPROACHING THRESHOLD"
+        urgency = "MEDIUM"
+        message = (f"Current region at {threshold_percent:.1f}% of Korean target. "
+                  f"Consider migration to maintain compliance buffer.")
+    else:
+        status = "✅ BELOW THRESHOLD"
+        urgency = "LOW"
+        message = (f"Current region at {threshold_percent:.1f}% of threshold. "
+                  f"Migration optional for further optimization.")
+
+    # Build current region info
+    current_region_info = {
+        "code": current_region,
+        "name": current_data["region_name"],
+        "carbon_intensity_gco2_kwh": current_intensity,
+        "current_emissions_gco2_hour": current_emissions,
+        "threshold_gco2_kwh": threshold_gco2_kwh,
+        "threshold_percent": threshold_percent
+    }
+
+    # Add PUE info if available
+    if current_pue is not None:
+        current_region_info["typical_pue"] = current_pue
+        current_region_info["meets_pue_target"] = current_pue <= KOREA_PUE_GREEN_DC.target_pue
+        current_region_info["pue_target"] = KOREA_PUE_GREEN_DC.target_pue
 
     return {
         "workload": workload_name,
         "namespace": namespace,
         "power_watts": power_watts,
-        "comparisons": comparisons,
-        "best_region": comparisons[0]["region_name"],
-        "best_region_savings_percent": savings_percent,
-        "migration_recommendation": (
-            f"Migrating to {comparisons[0]['region_name']} would reduce carbon emissions by "
-            f"{savings_percent:.1f}%. Consider for batch workloads or latency-insensitive applications."
-            if savings_percent > 10 else
-            "Current region is already relatively clean. Migration not recommended."
+        "current_region": current_region_info,
+        "status": status,
+        "urgency": urgency,
+        "message": message,
+        "recommended_regions": recommendations[:5],  # Top 5 best options
+        "total_regions_analyzed": len(all_regions),
+        "migration_note": (
+            "Consider latency requirements, data residency regulations, "
+            "and application architecture before migration. "
+            "Recommendations ranked by carbon savings (primary) and PUE efficiency (secondary)."
         )
     }
 

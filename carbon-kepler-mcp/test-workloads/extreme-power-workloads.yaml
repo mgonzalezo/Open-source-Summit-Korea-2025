@@ -244,6 +244,101 @@ spec:
           value: "1"
 
 ---
+# Carbon-intensive batch workload - PERFECT MIGRATION CANDIDATE
+# This workload is non-latency-sensitive and should migrate to Stockholm/Oregon
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbon-heavy-batch-processor
+  namespace: non-compliant-workloads
+  labels:
+    app: batch-processor
+    demo: migration-candidate
+    power-profile: extreme
+  annotations:
+    description: "High-power batch processing - migration candidate for Stockholm/Oregon"
+    workload-type: "batch"
+    latency-sensitivity: "low"
+spec:
+  replicas: 1  # Single replica for clear per-pod power measurement
+  selector:
+    matchLabels:
+      app: batch-processor
+  template:
+    metadata:
+      labels:
+        app: batch-processor
+        demo: migration-candidate
+        power-profile: extreme
+        workload-type: batch
+    spec:
+      containers:
+      - name: batch-processor
+        image: python:3.11-slim
+        resources:
+          requests:
+            cpu: "4000m"      # Request 4 CPUs
+            memory: "4Gi"
+          limits:
+            cpu: "8000m"      # Allow up to 8 CPUs
+            memory: "8Gi"
+        command: ["python3", "-c"]
+        args:
+        - |
+          # Simulate carbon-intensive batch processing workload
+          # This represents ETL jobs, data processing, ML training - non-latency-sensitive
+          import time
+          import hashlib
+          import random
+          from multiprocessing import Pool, cpu_count
+
+          print("=" * 60)
+          print("Carbon-Heavy Batch Processor Starting")
+          print("=" * 60)
+          print(f"CPUs available: {cpu_count()}")
+          print("Workload Type: Batch Processing (Migration Candidate)")
+          print("Latency Sensitivity: LOW - Can migrate to cleaner regions")
+          print("=" * 60)
+
+          def process_batch(batch_id):
+              """CPU-intensive batch processing"""
+              # Simulate data processing with cryptographic hashing
+              result = 0
+              for i in range(100000):
+                  data = f"batch-{batch_id}-item-{i}-{random.random()}".encode()
+                  # Multiple hash iterations (CPU intensive)
+                  for _ in range(10):
+                      hash_obj = hashlib.sha256(data)
+                      data = hash_obj.digest()
+                  result += int.from_bytes(data[:4], 'big')
+              return result
+
+          batch_num = 0
+          while True:
+              print(f"\n{'='*60}")
+              print(f"Processing Batch #{batch_num}")
+              print(f"{'='*60}")
+
+              # Parallel batch processing across all CPUs
+              with Pool(processes=cpu_count()) as pool:
+                  batch_ids = range(batch_num * 100, (batch_num + 1) * 100)
+                  results = pool.map(process_batch, batch_ids)
+
+              total = sum(results)
+              print(f"Batch #{batch_num} complete - Processed {len(results)} items")
+              print(f"Result: {total}")
+              print(f"💡 MIGRATION TIP: This batch workload could run in Stockholm")
+              print(f"   with 97% less carbon emissions!")
+
+              batch_num += 1
+              time.sleep(5)  # Brief pause between batches
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: WORKLOAD_TYPE
+          value: "carbon-heavy-batch-migration-candidate"
+
+---
 # Massively over-provisioned idle workload (wasteful)
 apiVersion: apps/v1
 kind: Deployment
