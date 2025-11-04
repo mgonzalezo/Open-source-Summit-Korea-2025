@@ -55,6 +55,10 @@ def calculate_workload_carbon_intensity(
     Returns:
         Workload carbon intensity in gCO2eq/kWh
     """
+    # Edge case: idle/zero-power workloads have 0 carbon intensity
+    if power_watts <= 0:
+        return 0.0
+
     # For a workload, the carbon intensity is essentially the grid intensity
     # scaled by the workload's power efficiency
     # In simplified model: workload intensity ≈ grid intensity
