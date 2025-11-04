@@ -401,10 +401,15 @@ async def list_workloads_by_compliance(
     # Get all pods in namespace
     pods = kepler_client.list_pods(namespace)
 
-    # OPTIMIZATION: Fetch node metrics and regional data once for all pods
-    node_metrics = kepler_client.get_node_metrics()
+    # OPTIMIZATION: Fetch all shared data once for all pods (not per pod in loop)
     regional_data = get_regional_carbon_intensity(region)
     grid_intensity = regional_data["average_gco2_kwh"] if regional_data else KOREA_CARBON_INTENSITY
+
+    # Pre-fetch regional PUE once (not per pod)
+    regional_pue_data = get_regional_pue(region)
+    regional_pue = regional_pue_data.get("typical_pue") if regional_pue_data else 1.4
+
+    from .korea_compliance import assess_carbon_compliance, PUEComplianceResult
 
     workloads = []
     compliant_count = 0
@@ -418,27 +423,24 @@ async def list_workloads_by_compliance(
             pod_power = kepler_client.get_pod_power_watts(pod_name, namespace)
             power_watts = pod_power.get("total_watts", 0.0)
 
-            # Quick compliance check (skip full recommendation generation)
-            workload_metrics = WorkloadMetrics(
-                cpu_watts=power_watts,
-                memory_watts=0.0,
-                gpu_watts=0.0,
-                other_watts=0.0
+            # Quick carbon compliance check
+            carbon_result = assess_carbon_compliance(
+                power_watts,
+                grid_intensity
             )
 
-            assessment = assess_korea_compliance(
-                workload_name=pod_name,
-                namespace=namespace,
-                region=region,
-                workload_metrics=workload_metrics,
-                node_total_power_watts=node_metrics.get("cpu_watts_total", 0.0),
-                grid_carbon_intensity_gco2_kwh=grid_intensity
+            # Quick PUE compliance check (using pre-fetched regional PUE)
+            pue_result = PUEComplianceResult(
+                status="COMPLIANT" if regional_pue <= KOREA_PUE_TARGET else "NON_COMPLIANT",
+                current_pue=regional_pue,
+                target_pue=KOREA_PUE_TARGET,
+                gap_percent=((regional_pue - KOREA_PUE_TARGET) / KOREA_PUE_TARGET * 100)
             )
 
             overall_status = (
                 "COMPLIANT" if (
-                    assessment.carbon.status == "COMPLIANT" and
-                    assessment.pue.status == "COMPLIANT"
+                    carbon_result.status == "COMPLIANT" and
+                    pue_result.status == "COMPLIANT"
                 ) else "NON_COMPLIANT"
             )
 
@@ -448,10 +450,10 @@ async def list_workloads_by_compliance(
             workloads.append({
                 "workload": pod_name,
                 "status": overall_status,
-                "carbon_status": assessment.carbon.status,
-                "pue_status": assessment.pue.status,
+                "carbon_status": carbon_result.status,
+                "pue_status": pue_result.status,
                 "power_watts": power_watts,
-                "emissions_kg_month": assessment.carbon.monthly_emissions_kg
+                "emissions_kg_month": carbon_result.monthly_emissions_kg
             })
 
             if overall_status == "COMPLIANT":
