@@ -218,11 +218,32 @@ def assess_korea_compliance(
         grid_carbon_intensity_gco2_kwh
     )
 
-    # Assess PUE compliance
-    pue_result = assess_pue_compliance(
-        workload_metrics.total_watts,
-        node_total_power_watts
-    )
+    # Assess PUE compliance using regional PUE data
+    from .compliance_standards import get_regional_pue
+    regional_pue_data = get_regional_pue(region)
+
+    if regional_pue_data:
+        # Use regional PUE directly instead of estimating from overhead
+        regional_pue = regional_pue_data["typical_pue"]
+        pue_result = PUEComplianceResult(
+            status="COMPLIANT" if regional_pue <= KOREA_PUE_GREEN_DC.target_pue else "NON_COMPLIANT",
+            current_pue=regional_pue,
+            target_pue=KOREA_PUE_GREEN_DC.target_pue,
+            gap_percent=((regional_pue - KOREA_PUE_GREEN_DC.target_pue) / KOREA_PUE_GREEN_DC.target_pue * 100)
+        )
+        logger.debug(
+            "pue_compliance_assessed",
+            status=pue_result.status,
+            regional_pue=regional_pue,
+            target_pue=KOREA_PUE_GREEN_DC.target_pue,
+            gap_percent=pue_result.gap_percent
+        )
+    else:
+        # Fallback to estimation if regional data not available
+        pue_result = assess_pue_compliance(
+            workload_metrics.total_watts,
+            node_total_power_watts
+        )
 
     logger.info(
         "korea_compliance_assessed",
