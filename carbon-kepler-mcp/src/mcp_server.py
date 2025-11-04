@@ -464,13 +464,29 @@ async def list_workloads_by_compliance(
         except Exception as e:
             logger.warning("workload_assessment_skipped", pod=pod_name, error=str(e))
 
+    # Add compliance breakdown
+    carbon_compliant = len([w for w in workloads if w["carbon_status"] == "COMPLIANT"])
+    pue_compliant = len([w for w in workloads if w["pue_status"] == "COMPLIANT"])
+    both_compliant = len([w for w in workloads if w["carbon_status"] == "COMPLIANT" and w["pue_status"] == "COMPLIANT"])
+
+    # Separate active vs idle workloads
+    active_workloads = [w for w in workloads if w["power_watts"] > 0]
+    idle_workloads = [w for w in workloads if w["power_watts"] == 0]
+
     return {
         "namespace": namespace,
         "standard": standard,
         "total_workloads": len(workloads),
-        "compliant_count": compliant_count,
-        "non_compliant_count": non_compliant_count,
-        "workloads": workloads
+        "active_workloads": len(active_workloads),
+        "idle_workloads": len(idle_workloads),
+        "compliance_summary": {
+            "fully_compliant": both_compliant,
+            "carbon_compliant": carbon_compliant,
+            "pue_compliant": pue_compliant,
+            "non_compliant": non_compliant_count
+        },
+        "workloads": workloads,
+        "note": "Idle workloads (0W) are carbon compliant but may fail PUE if data center PUE exceeds target."
     }
 
 
