@@ -142,6 +142,95 @@ def estimate_watts_from_joules(joules_metrics: Dict[str, float], interval_second
 # MCP TOOLS
 # ============================================================================
 
+# Helper function for compliance assessment (shared by multiple tools)
+def _perform_workload_compliance_assessment(
+    workload_name: str,
+    namespace: str,
+    standard: str,
+    region: str
+) -> Dict:
+    """
+    Internal helper to perform compliance assessment.
+
+    This function contains the core logic extracted from assess_workload_compliance
+    so it can be reused by list_workloads_by_compliance without circular tool calls.
+    """
+    # Fetch workload power metrics from Kepler (calculates watts from joule deltas)
+    pod_power = kepler_client.get_pod_power_watts(workload_name, namespace)
+    node_metrics = kepler_client.get_node_metrics()
+
+    # Create workload metrics object
+    # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics at pod level
+    workload_metrics = WorkloadMetrics(
+        cpu_watts=pod_power.get("total_watts", 0.0),  # Use total_watts (CPU + DRAM)
+        memory_watts=0.0,  # Not available in Kepler v0.11.2 at pod level
+        gpu_watts=0.0,     # Not available in Kepler v0.11.2 at pod level
+        other_watts=0.0    # Not available in Kepler v0.11.2 at pod level
+    )
+
+    # Get regional carbon intensity
+    regional_data = get_regional_carbon_intensity(region)
+    if regional_data:
+        grid_intensity = regional_data["average_gco2_kwh"]
+    else:
+        grid_intensity = KOREA_CARBON_INTENSITY
+
+    # Assess compliance
+    # Note: Using CPU watts only since memory/GPU not available at pod level in Kepler v0.11.2
+    assessment = assess_korea_compliance(
+        workload_name=workload_name,
+        namespace=namespace,
+        region=region,
+        workload_metrics=workload_metrics,
+        node_total_power_watts=node_metrics.get("cpu_watts_total", 0.0),
+        grid_carbon_intensity_gco2_kwh=grid_intensity
+    )
+
+    # Generate recommendations
+    recommendation = generate_recommendation(assessment, workload_metrics, region)
+
+    # Build response
+    response = {
+        "workload": workload_name,
+        "namespace": namespace,
+        "standard": standard,
+        "region": region,
+
+        # Overall status
+        "status": (
+            "COMPLIANT" if (
+                assessment.carbon.status == "COMPLIANT" and
+                assessment.pue.status == "COMPLIANT"
+            ) else "NON_COMPLIANT"
+        ),
+
+        # Carbon compliance
+        "carbon_status": assessment.carbon.status,
+        "current_carbon_intensity_gCO2eq_kWh": assessment.carbon.current_carbon_intensity_gco2_kwh,
+        "target_carbon_intensity_gCO2eq_kWh": assessment.carbon.target_carbon_intensity_gco2_kwh,
+        "grid_carbon_intensity_gCO2eq_kWh": assessment.carbon.grid_carbon_intensity_gco2_kwh,
+
+        # PUE compliance
+        "pue_status": assessment.pue.status,
+        "current_pue": assessment.pue.current_pue,
+        "target_pue": assessment.pue.target_pue,
+
+        # Power and emissions
+        "current_power_watts": assessment.power_watts,
+        "hourly_emissions_gCO2eq": assessment.carbon.hourly_emissions_gco2,
+        "monthly_emissions_kg": assessment.carbon.monthly_emissions_kg,
+
+        # Recommendations
+        "recommendation": recommendation.summary,
+        "optimizations": [opt.dict() for opt in recommendation.optimizations],
+        "priority_actions": recommendation.priority_actions,
+
+        "timestamp": assessment.timestamp
+    }
+
+    return response
+
+
 @mcp.tool()
 async def assess_workload_compliance(
     workload_name: str,
@@ -174,78 +263,9 @@ async def assess_workload_compliance(
     )
 
     try:
-        # Fetch workload power metrics from Kepler (calculates watts from joule deltas)
-        pod_power = kepler_client.get_pod_power_watts(workload_name, namespace)
-        node_metrics = kepler_client.get_node_metrics()
-
-        # Create workload metrics object
-        # Note: Kepler v0.11.2 on AWS c5.metal only exposes CPU metrics at pod level
-        workload_metrics = WorkloadMetrics(
-            cpu_watts=pod_power.get("total_watts", 0.0),  # Use total_watts (CPU + DRAM)
-            memory_watts=0.0,  # Not available in Kepler v0.11.2 at pod level
-            gpu_watts=0.0,     # Not available in Kepler v0.11.2 at pod level
-            other_watts=0.0    # Not available in Kepler v0.11.2 at pod level
+        response = _perform_workload_compliance_assessment(
+            workload_name, namespace, standard, region
         )
-
-        # Get regional carbon intensity
-        regional_data = get_regional_carbon_intensity(region)
-        if regional_data:
-            grid_intensity = regional_data["average_gco2_kwh"]
-        else:
-            grid_intensity = KOREA_CARBON_INTENSITY
-
-        # Assess compliance
-        # Note: Using CPU watts only since memory/GPU not available at pod level in Kepler v0.11.2
-        assessment = assess_korea_compliance(
-            workload_name=workload_name,
-            namespace=namespace,
-            region=region,
-            workload_metrics=workload_metrics,
-            node_total_power_watts=node_metrics.get("cpu_watts_total", 0.0),
-            grid_carbon_intensity_gco2_kwh=grid_intensity
-        )
-
-        # Generate recommendations
-        recommendation = generate_recommendation(assessment, workload_metrics, region)
-
-        # Build response
-        response = {
-            "workload": workload_name,
-            "namespace": namespace,
-            "standard": standard,
-            "region": region,
-
-            # Overall status
-            "status": (
-                "COMPLIANT" if (
-                    assessment.carbon.status == "COMPLIANT" and
-                    assessment.pue.status == "COMPLIANT"
-                ) else "NON_COMPLIANT"
-            ),
-
-            # Carbon compliance
-            "carbon_status": assessment.carbon.status,
-            "current_carbon_intensity_gCO2eq_kWh": assessment.carbon.current_carbon_intensity_gco2_kwh,
-            "target_carbon_intensity_gCO2eq_kWh": assessment.carbon.target_carbon_intensity_gco2_kwh,
-            "grid_carbon_intensity_gCO2eq_kWh": assessment.carbon.grid_carbon_intensity_gco2_kwh,
-
-            # PUE compliance
-            "pue_status": assessment.pue.status,
-            "current_pue": assessment.pue.current_pue,
-            "target_pue": assessment.pue.target_pue,
-
-            # Power and emissions
-            "current_power_watts": assessment.power_watts,
-            "hourly_emissions_gCO2eq": assessment.carbon.hourly_emissions_gco2,
-            "monthly_emissions_kg": assessment.carbon.monthly_emissions_kg,
-
-            # Recommendations
-            "recommendation": recommendation.summary,
-            "optimizations": [opt.dict() for opt in recommendation.optimizations],
-            "priority_actions": recommendation.priority_actions,
-
-            "timestamp": assessment.timestamp
-        }
 
         logger.info(
             "workload_assessment_complete",
@@ -389,7 +409,8 @@ async def list_workloads_by_compliance(
         pod_name = pod_info["pod"]
 
         try:
-            assessment = await assess_workload_compliance(
+            # Use helper function instead of calling tool directly
+            assessment = _perform_workload_compliance_assessment(
                 pod_name,
                 namespace,
                 standard,
