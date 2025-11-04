@@ -401,6 +401,11 @@ async def list_workloads_by_compliance(
     # Get all pods in namespace
     pods = kepler_client.list_pods(namespace)
 
+    # OPTIMIZATION: Fetch node metrics and regional data once for all pods
+    node_metrics = kepler_client.get_node_metrics()
+    regional_data = get_regional_carbon_intensity(region)
+    grid_intensity = regional_data["average_gco2_kwh"] if regional_data else KOREA_CARBON_INTENSITY
+
     workloads = []
     compliant_count = 0
     non_compliant_count = 0
@@ -409,27 +414,47 @@ async def list_workloads_by_compliance(
         pod_name = pod_info["pod"]
 
         try:
-            # Use helper function instead of calling tool directly
-            assessment = _perform_workload_compliance_assessment(
-                pod_name,
-                namespace,
-                standard,
-                region
+            # Fetch pod power (uses cache after first call)
+            pod_power = kepler_client.get_pod_power_watts(pod_name, namespace)
+            power_watts = pod_power.get("total_watts", 0.0)
+
+            # Quick compliance check (skip full recommendation generation)
+            workload_metrics = WorkloadMetrics(
+                cpu_watts=power_watts,
+                memory_watts=0.0,
+                gpu_watts=0.0,
+                other_watts=0.0
             )
 
-            if status_filter and assessment["status"] != status_filter:
+            assessment = assess_korea_compliance(
+                workload_name=pod_name,
+                namespace=namespace,
+                region=region,
+                workload_metrics=workload_metrics,
+                node_total_power_watts=node_metrics.get("cpu_watts_total", 0.0),
+                grid_carbon_intensity_gco2_kwh=grid_intensity
+            )
+
+            overall_status = (
+                "COMPLIANT" if (
+                    assessment.carbon.status == "COMPLIANT" and
+                    assessment.pue.status == "COMPLIANT"
+                ) else "NON_COMPLIANT"
+            )
+
+            if status_filter and overall_status != status_filter:
                 continue
 
             workloads.append({
                 "workload": pod_name,
-                "status": assessment["status"],
-                "carbon_status": assessment["carbon_status"],
-                "pue_status": assessment["pue_status"],
-                "power_watts": assessment["current_power_watts"],
-                "emissions_kg_month": assessment["monthly_emissions_kg"]
+                "status": overall_status,
+                "carbon_status": assessment.carbon.status,
+                "pue_status": assessment.pue.status,
+                "power_watts": power_watts,
+                "emissions_kg_month": assessment.carbon.monthly_emissions_kg
             })
 
-            if assessment["status"] == "COMPLIANT":
+            if overall_status == "COMPLIANT":
                 compliant_count += 1
             else:
                 non_compliant_count += 1
