@@ -247,11 +247,12 @@ Thumbs.db
 cloudformation-outputs.json
 stack-outputs.json
 
-# Ignore all markdown files except readme.md and rapl-architecture-diagram.md
+# Ignore all markdown files except readme.md, rapl-architecture-diagram.md, and aws-bedrock-migration-plan.md
 *.md
 !readme.md
 !README.md
 !rapl-architecture-diagram.md
+!aws-bedrock-migration-plan.md
 
 # Claude Desktop and MCP configuration
 claude_desktop_config.json

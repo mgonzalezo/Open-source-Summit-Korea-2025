@@ -1,46 +1,70 @@
-# Kepler Energy Monitoring & Carbon Compliance for Kubernetes
+# kepler energy monitoring & carbon compliance for kubernetes
 
-**Open Source Summit Korea 2025 - Demo Repository**
+**open source summit korea 2025 - demo repository**
 
-This repository demonstrates real-time energy monitoring and carbon compliance assessment for Kubernetes workloads using Kepler (Kubernetes Efficient Power Level Exporter) with Intel RAPL and Korean regulatory standards.
+this repository demonstrates real-time energy monitoring and carbon compliance assessment for kubernetes workloads using kepler (kubernetes efficient power level exporter) with intel rapl, amazon bedrock ai, and korean regulatory standards.
 
-## Overview
+## overview
 
-This project provides a complete solution for:
+this project provides a complete enterprise-grade solution for:
 
-1. **AWS Deployment** - Automated infrastructure for running Kepler on AWS bare-metal instances with Intel RAPL
-2. **Carbon-Kepler MCP** - Model Context Protocol server for Korean carbon compliance assessments
-3. **Claude Desktop Integration** - Natural language interface for compliance queries
+1. **aws deployment** - automated infrastructure for running kepler on aws bare-metal instances with intel rapl
+2. **amazon bedrock integration** - ai-powered compliance analysis using claude 3.5 sonnet
+3. **korean government apis** - real-time carbon intensity data from official sources
+4. **serverless mcp tools** - aws lambda functions for compliance assessment
+5. **claude desktop integration** - natural language interface for compliance queries
 
-Together, they enable real-time power measurement, carbon compliance assessment, and AI-assisted sustainability analysis for Kubernetes workloads.
+together, they enable real-time power measurement, ai-powered carbon compliance assessment, and automated sustainability analysis for kubernetes workloads.
 
-## Architecture
+## architecture evolution
+
+### current architecture (20% aws - fastmcp based)
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                  Open Source Summit Korea 2025 Demo                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌────────────────────────────┐     ┌──────────────────────────────────┐   │
-│  │  AWS c5.metal Bare-Metal   │     │  Carbon-Kepler MCP Server        │   │
-│  │                            │     │                                  │   │
-│  │  K3s Kubernetes            │     │  FastMCP 2.12.5 (SSE)            │   │
-│  │  Kepler v0.11.2            │────→│  8 Compliance Tools              │   │
-│  │  Intel RAPL (4 zones)      │     │  Korean Standards                │   │
-│  │  Real Power Measurement    │     │  Recommendations Engine          │   │
-│  │                            │     │                                  │   │
-│  │  Direct hardware energy    │     │  탄소중립법: 424 gCO2eq/kWh      │   │
-│  │  counters in joules        │     │  에너지합리화법: PUE ≤ 1.4       │   │
-│  └────────────────────────────┘     └──────────────────────────────────┘   │
-│          Infrastructure                      Analysis & Compliance          │
-│                                                                             │
-│  ┌────────────────────────────────────────────────────────────────────┐    │
-│  │  Claude Desktop (Windows) + SSE Bridge                             │    │
-│  │  Natural language queries: "Check compliance with Korean standards"│    │
-│  └────────────────────────────────────────────────────────────────────┘    │
-│                        User Interface                                      │
-└─────────────────────────────────────────────────────────────────────────────┘
+claude desktop -> sse -> aws c5.metal -> k3s -> fastmcp server (8 tools) -> kepler v0.11.2 (rapl)
 ```
+
+### target architecture (70%+ aws - bedrock powered)
+
+see [aws-bedrock-migration-plan.md](aws-bedrock-migration-plan.md) for complete architecture details.
+
+```
+claude desktop
+    |
+    | https/iam auth
+    v
+amazon api gateway (rest api)
+    |
+    v
+aws lambda functions (8 serverless mcp tools)
+    |
+    |-> amazon bedrock (claude 3.5 sonnet ai analysis)
+    |-> korean gov apis (kpx, k-eco, kea, kma)
+    |-> amazon dynamodb (compliance history)
+    |-> amazon s3 (reports)
+    |-> aws step functions (workflows)
+    |
+    v
+kepler metrics (via cloudwatch or http)
+    |
+    v
+aws c5.metal (intel rapl hardware measurement)
+  - intel xeon platinum 8275cl (96 vcpus)
+  - 192 gb ram
+  - 4 rapl zones (2 cpu + 2 dram)
+  - k3s + kepler v0.11.2
+```
+
+key aws services:
+
+- amazon bedrock (ai-powered compliance analysis)
+- aws lambda (serverless tools)
+- amazon dynamodb (data storage)
+- amazon api gateway (api management)
+- aws step functions (workflow orchestration)
+- amazon cloudwatch (observability)
+- aws secrets manager (credentials)
+- aws x-ray (tracing)
 
 ## Key Features
 
@@ -366,25 +390,214 @@ Show detailed compliance assessment with:
 - Compliance status (COMPLIANT/NON_COMPLIANT)
 - Actionable recommendations
 
-## Resources
+## aws bedrock integration (enterprise upgrade)
 
-### Kepler Project
-- [Official Website](https://sustainable-computing.io/)
-- [GitHub Repository](https://github.com/sustainable-computing-io/kepler)
-- [CNCF Project Page](https://landscape.cncf.io/project=kepler)
+### migration to aws-powered architecture
 
-### MCP Protocol
-- [Model Context Protocol](https://modelcontextprotocol.io/)
-- [MCP Specification](https://spec.modelcontextprotocol.io/)
-- [Claude Desktop Integration](https://docs.anthropic.com/claude/docs/model-context-protocol)
+for enterprise deployments requiring enhanced ai capabilities and integration with korean government apis, see the complete migration plan:
 
-### Korean Regulations
-- [Carbon Neutrality Act (탄소중립법)](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=230613)
-- [Energy Rationalization Act (에너지합리화법)](https://www.law.go.kr/법령/에너지이용합리화법)
+**[aws-bedrock-migration-plan.md](aws-bedrock-migration-plan.md)**
 
-### RAPL Documentation
-- [Intel RAPL Overview](https://www.kernel.org/doc/html/latest/power/powercap/powercap.html)
-- [Linux Powercap Documentation](https://docs.kernel.org/power/powercap/powercap.html)
+this upgrade transforms the solution from 20% to 70%+ aws service integration:
+
+migration highlights:
+
+- replace fastmcp with aws lambda serverless functions
+- integrate amazon bedrock (claude 3.5 sonnet) for ai-powered compliance analysis
+- connect to korean government apis (kpx, k-eco, kea, kma) for real-time carbon data
+- implement amazon dynamodb for compliance history and analytics
+- add aws step functions for automated workflows
+- deploy amazon cloudwatch for comprehensive observability
+- secure credentials with aws secrets manager
+
+benefits:
+
+- ai-powered compliance recommendations using claude 3.5 sonnet
+- real-time carbon intensity from official korean government sources
+- serverless architecture with auto-scaling
+- comprehensive audit trails and compliance reporting
+- reduced operational overhead
+- enterprise-grade security and compliance
+
+implementation timeline: 4 weeks (see migration plan for detailed phases)
+
+## aws c5.metal bare-metal server specifications
+
+### why bare-metal?
+
+this solution requires aws c5.metal bare-metal instances because:
+
+1. native rapl access - virtualized instances do not expose intel rapl hardware counters
+2. accurate power measurement - korean compliance regulations require hardware-level precision
+3. no hypervisor overhead - direct kernel access to msr (model-specific registers)
+4. deterministic performance - dedicated resources without noisy neighbor issues
+
+### hardware specifications
+
+instance type: c5.metal
+region: ap-northeast-1 (tokyo)
+pricing: ~$4.08/hour on-demand (~$2,938/month)
+
+processor:
+
+- model: intel xeon platinum 8275cl (cascade lake)
+- architecture: x86_64
+- base frequency: 3.0 ghz
+- turbo frequency: 3.6 ghz
+- sockets: 2
+- cores per socket: 48
+- total vcpus: 96
+- hyper-threading: enabled (192 threads)
+- cache: l1 3mb, l2 48mb, l3 35.75mb per socket
+- instruction sets: avx-512, aes-ni
+
+memory:
+
+- total ram: 192 gb (ddr4)
+- configuration: 96 gb per socket
+- memory channels: 6 per socket
+- speed: 2933 mt/s
+- ecc: enabled
+
+storage:
+
+- ebs-optimized: yes
+- max ebs bandwidth: 19 gbps
+- max iops: 80,000
+- storage type: gp3 ssd recommended
+
+network:
+
+- network performance: 25 gbps
+- enhanced networking: enabled (ena)
+- network interface cards: 4 x 25 gbps
+- ipv6 support: yes
+- placement groups: supported
+
+power measurement (intel rapl):
+
+- rapl support: native hardware support
+- rapl zones: 4 active zones
+  - package-0: cpu socket 0 (0-200w range)
+  - package-1: cpu socket 1 (0-200w range)
+  - dram-0: memory socket 0
+  - dram-1: memory socket 1
+- measurement precision: microjoule (μj)
+- update frequency: ~1ms hardware, 5s kepler aggregation
+- interface: /sys/class/powercap/intel-rapl:*/energy_uj
+
+cost management:
+
+- running: $4.08/hour ($2,938/month)
+- stopped: only ebs storage (~$20/month)
+- savings when stopped: ~$2,918/month
+- recommendation: stop instance when not in active use
+
+deployment:
+
+- cloudformation stack deployment: ~15 minutes
+- includes: k3s, kepler v0.11.2, rapl modules, test workloads
+- fully automated via userdata script
+- see [aws-deployment/](aws-deployment/) for details
+
+### rapl architecture on c5.metal
+
+```text
+hardware layer:
+  cpu package 0 (48 cores)
+    msr 0x611 (pkg_energy_status)
+    msr 0x619 (dram_energy_status)
+  cpu package 1 (48 cores)
+    msr 0x611 (pkg_energy_status)
+    msr 0x619 (dram_energy_status)
+
+kernel modules:
+  msr (model-specific register access)
+  intel_rapl_common (rapl framework)
+  intel_rapl_msr (msr-based rapl interface)
+
+sysfs interface:
+  /sys/class/powercap/intel-rapl:0/ (package-0)
+    energy_uj (cumulative microjoules)
+    max_energy_range_uj (rollover threshold)
+    name
+  /sys/class/powercap/intel-rapl:1/ (package-1)
+  /sys/class/powercap/intel-rapl:0:0/ (dram-0)
+  /sys/class/powercap/intel-rapl:1:0/ (dram-1)
+
+kepler access:
+  reads energy_uj every 5 seconds
+  calculates: power (w) = delta_energy (j) / delta_time (s)
+```
+
+## korean government api integration
+
+### target apis for real-time compliance data
+
+1. 전력거래소 (kpx - korea power exchange)
+   - api: <https://openapi.kpx.or.kr/>
+   - provides: real-time carbon intensity, grid composition, regional electricity pricing
+   - update frequency: hourly
+   - authentication: api key required
+
+2. 한국환경공단 (k-eco - korea environment corporation)
+   - api: <https://www.gir.go.kr/>
+   - provides: carbon emission factors, greenhouse gas inventory data
+   - update frequency: daily
+   - authentication: registration required
+
+3. 한국에너지공단 (kea - korea energy agency)
+   - provides: energy efficiency standards, data center pue benchmarks
+   - authentication: registration required
+
+4. 기상청 (kma - korea meteorological administration)
+   - api: <https://www.weather.go.kr/w/index.do>
+   - provides: weather-based renewable energy forecasting, regional climate data
+   - update frequency: 3-hour intervals
+   - authentication: api key required
+
+### integration approach
+
+the aws bedrock migration includes aws lambda functions to:
+
+- query government apis for real-time carbon intensity
+- cache responses in amazon dynamodb (5-minute ttl for rate limiting)
+- store api credentials in aws secrets manager
+- validate data quality and fallback to static values if apis unavailable
+- log all api interactions for compliance auditing
+
+see [aws-bedrock-migration-plan.md](aws-bedrock-migration-plan.md) for implementation details.
+
+## resources
+
+### kepler project
+
+- [official website](https://sustainable-computing.io/)
+- [github repository](https://github.com/sustainable-computing-io/kepler)
+- [cncf project page](https://landscape.cncf.io/project=kepler)
+
+### mcp protocol
+
+- [model context protocol](https://modelcontextprotocol.io/)
+- [mcp specification](https://spec.modelcontextprotocol.io/)
+- [claude desktop integration](https://docs.anthropic.com/claude/docs/model-context-protocol)
+
+### amazon bedrock
+
+- [amazon bedrock documentation](https://docs.aws.amazon.com/bedrock/)
+- [anthropic claude models](https://www.anthropic.com/claude)
+- [bedrock pricing](https://aws.amazon.com/bedrock/pricing/)
+
+### korean regulations
+
+- [carbon neutrality act (탄소중립법)](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=230613)
+- [energy rationalization act (에너지합리화법)](https://www.law.go.kr/법령/에너지이용합리화법)
+- [korean government open data portal](https://www.data.go.kr/)
+
+### rapl documentation
+
+- [intel rapl overview](https://www.kernel.org/doc/html/latest/power/powercap/powercap.html)
+- [linux powercap documentation](https://docs.kernel.org/power/powercap/powercap.html)
 
 ## License
 
